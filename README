@@ -1,0 +1,21 @@
+
+Dependencies
+------------
+* python 2.x with expat
+* redis-py
+
+Limitations
+-----------
+
+Redirects:
+  * redirected pages must be less than 1000 characters
+  * only regular page to regular page redirect is valid
+      (no other type such as page to category, etc.)
+
+Templates:
+  * Templates are not expanded. Links and categories
+    inside a template are not included in the set of
+    outgoing links of page. If you know a template
+    for which it would be important to be expanded for
+    the purpose of this project, let me know.
+

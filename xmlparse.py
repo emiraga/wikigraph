@@ -1,17 +1,29 @@
-import re
+import time, os, re
 import urllib
 import itertools
 import htmlentitydefs
 import xml.parsers.expat
+import hashlib
+import redis
+import struct
 
-#app imports
+#app specific imports
 import conf
 import langcodes
 
-LINKS = open('dumps/links','wb')
-CATLINKS = open('dumps/catlinks','wb')
-STRAYPREFIX = open('dumps/strayprefix','wb')
-glob = {'countpages':0}
+REDIR_REGEX = re.compile(
+            r'^[^\[]*' # preceeding text that does not contain [
+            + '(' # start group
+            + '#redirect' # keyword
+            + '\s*:?\s*'  # space and potential colon
+            + r'\[\[[^\[]*?\]\]' # regular link
+            + ')', # end group
+            re.DOTALL | re.IGNORECASE
+        )
+
+def sha1(text):
+    """ Compute hex sha1 of unicode string """
+    return hashlib.sha1(text.encode('utf-8')).hexdigest()
 
 class DocState:
     """ Tracking state of XML document with expat parser """
@@ -22,73 +34,147 @@ class DocState:
 
     in_title= False
     title= None
-    count= 0
 
 class WikiXmlParser(object):
+    """ Contains handlers for expat parser, sample usage:
+
+            p = xml.parsers.expat.ParserCreate()
+            wiki_parse = WikiXmlParser(process_page_callback)
+
+            p.StartElementHandler = lambda name, attrs: \
+                    wiki_parse.start_element(name, attrs)
+            p.EndElementHandler = lambda name: \
+                    wiki_parse.end_element(name)
+            p.CharacterDataHandler = lambda data: \
+                    wiki_parse.char_data(data)
+    
+    """
     def __init__(self):
         self.state = DocState()
+        self.count_pages = 0
 
-def start_element(name, attrs):
-    """ Handle the start of XML tag """
-    if name == u'page':
-        assert(not DocState.in_page)
-        DocState.in_page = True
-        DocState.text = []
-        DocState.title = []
-    elif name == u'title':
-        assert(DocState.in_page)
-        DocState.in_title = True
-    elif name == u'text':
-        assert(DocState.in_page)
-        DocState.in_text = True
+    def set_page_callback(self, process_page_cb):
+        self.process_page = process_page_cb
 
-def end_element(name):
-    """ Handle the end of XML tag """
-    if name == u'page':
-        DocState.in_page = False
-        process_page(DocState)
-        glob['countpages'] += 1
-        if (glob['countpages'] % 100) == 0:
-            percent = glob['countpages']/41186.0
-            print percent
-            #if percent > 0.3: exit(0)
-    elif name == u'title':
-        assert(DocState.in_page)
-        DocState.in_title = False
-    elif name == u'text':
-        assert(DocState.in_page)
-        DocState.in_text = False
+    def start_element(self, name, attrs):
+        """ Handle the start of XML tag """
+        if name == u'page':
+            assert(not self.state.in_page)
+            self.state.in_page = True
+            self.state.text = []
+            self.state.title = []
+        elif name == u'title':
+            assert(self.state.in_page)
+            self.state.in_title = True
+        elif name == u'text':
+            assert(self.state.in_page)
+            self.state.in_text = True
 
-def char_data(data):
-    """ Data in XML document """
-    if DocState.in_title:
-        assert(not DocState.in_text)
-        DocState.title.append(data)
-    elif DocState.in_text:
-        assert(not DocState.in_title)
-        DocState.text.append(data) #concat many strings is not a good idea
+    def end_element(self, name):
+        """ Handle the end of XML tag """
+        if name == u'page':
+            self.state.in_page = False
+            self.process_page(self.state)
+            self.count_pages += 1
+            if (self.count_pages % 500) == 0:
+                print self.count_pages
+        elif name == u'title':
+            assert(self.state.in_page)
+            self.state.in_title = False
+        elif name == u'text':
+            assert(self.state.in_page)
+            self.state.in_text = False
 
-def process_page(doc):
-    """ Complete wiki page, data is in doc.text and doc.title """
+    def char_data(self, data):
+        """ Data in XML document """
+        if self.state.in_title:
+            assert(not self.state.in_text)
+            self.state.title.append(data)
+        elif self.state.in_text:
+            assert(not self.state.in_title)
+            self.state.text.append(data) #concat many strings is not a good idea
+
+# Redirect magic
+# File:mediawiki-1.16-1/includes/Title.php
+#  365     protected static function newFromRedirectInternal( $text ) {
+
+def process_page_stage1(doc, db):
+    """ 
+        Complete wiki page, data is in doc.text and doc.title 
+        In step1 we only care about valid pages and redirects.
+    """
+    text = ''.join(doc.text)
+    title = ''.join(doc.title)
+    assert(len(title)>0)
+    assert(len(text)>1)
+
+    sha1_title = sha1(title)
+    # Store title for easier lookup
+    db.set('title:'+sha1_title, title)
+
+    redirect = get_redirect(text)
+    if redirect:
+        db.set('redirect:'+sha1_title, sha1(redirect))
+    else:
+        db.set('page:'+sha1_title, db.incr('next:page_id'))
+
+def write_edges_file(node_id, links, fout):
+    """ Write edge list to file in binary format """
+    fout.write(struct.pack('i',int(node_id)))
+    fout.write(struct.pack('i',len(links)))
+    for link in links:
+        fout.write(struct.pack('i',int(link)))
+
+def process_page_stage3(doc, f_pages, f_cats, db):
+    """ Complete wiki page, data is in doc.text and doc.title 
+    """
     text = ''.join(doc.text)
     title = ''.join(doc.title)
 
     assert(len(title)>0)
     assert(len(text)>1)
 
-    #handle redirects
-    if text[0:9].lower() == '#redirect':
-        links = list(get_links(text));
-        if len(links) == 1 and links[0][0] == 0:
-            print links[0][1]
+    sha1_title = sha1(title)
+
+    redirect = get_redirect(text)
+    if redirect:
+        pass
     else:
+        page_id = db.get('page:'+sha1_title)
+        assert(page_id != None)
+
+        page_links = []
+        cat_links = []
         for link_type, link in get_links(text):
             if link_type == 0:
-                LINKS.write( (link+'\n').encode('utf-8') )
+                # Find id of the linked page
+                sha1_link = sha1(link)
+                link_id = db.get('page:'+sha1_link)
+                if link_id:
+                    page_links.append(link_id)
             elif link_type == 1:
-                CATLINKS.write( (link+'\n').encode('utf-8') )
+                cat_id = get_category_id(link, db)
+                cat_links.append(cat_id)
+                # Add this page set set
+                db.sadd('pages_in_cat:'+str(cat_id), page_id)
             else:
                 raise Exception('Unknown link type')
+        write_edges_file(page_id, page_links, f_pages)
+        write_edges_file(page_id, cat_links, f_cats)
+
+def get_category_id(cat_name, db):
+    sha1_name = sha1(cat_name)
+    # Keys with pattern 'title:*' are shared between pages and categories
+    db.set('title:'+sha1_name, cat_name)
+
+    # Check if category already exists
+    if db.setnx('category:'+sha1_name, 0):
+        # This is the first time we see this category
+        cat_id = db.incr('next:category_id')
+        db.set('category:'+sha1_name, cat_id )
+    else:
+        cat_id = db.get('category:'+sha1_name)
+    return cat_id
 
 ##
 # Parse links, too much magic going on here
@@ -148,7 +234,7 @@ def get_links(text):
                 # Link type is category
                 link_type, link = 1, afterprefix
             else:
-                STRAYPREFIX.write( (prefix+u'\n').encode('utf-8') )
+                pass # STRAYPREFIX.write( (prefix+u'\n').encode('utf-8') )
         # Multiple spaces and underscores become single
         link = re.sub(' +',' ',link)
         yield link_type, link[0].upper() + link[1:]
@@ -156,6 +242,51 @@ def get_links(text):
     #Extra note:
     # Opening '[[' not followed by ']]' and vice versa 
     # can appear only for images and I don't care about images
+
+def get_redirect(text):
+    # Skip pages that don't mention #redirect
+    # and pages longer than threshold
+    if len(text) > conf.REDIRECT_TH or \
+            not '#redirect' in text.lower():
+        return
+
+    redir = REDIR_REGEX.search(text)
+    if redir:
+        # reuse code from get_links since link handling is complex
+        links = list(get_links(redir.group(1)))
+        if len(links) > 1:
+            print 'Found too many links'
+            print links
+            print '========'
+            print text
+            print '========'
+            return
+        # Take redirects to regular page only
+        if len(links) and links[0][0] == 0:
+            return links[0][1]
+    elif '#redirect' in text.lower():
+        print '==== potential miss of redirect ===='
+        print text
+
+def resolve_redirect(key, db):
+    redirpage = key.split(':')[1]
+    if db.exists('page:'+redirpage):
+        db.delete(key) # just in case
+        return # already resolved
+    target = db.get(key)
+    if target == None:
+        return # it's not there
+
+    # In case of multiple redirects resolve them recursively
+    resolve_redirect('redirect:'+target, db)
+    
+    # Try to get page_id directly
+    page_id = db.get('page:'+target)
+    if page_id != None:
+        # Set proper page_id and delete redirect
+        db.set('page:'+redirpage, page_id)
+        db.delete(key)
+        return
 
 ##
 # Removes HTML or XML character references and entities from a text string.
@@ -186,6 +317,7 @@ def unescape_html(text):
     return re.sub("&#?\w+;", fixup, text)
 
 def test():
+    """ Run couple of tests, not comprehensive """
     text = u""" 
         [[LinkOne]] [[Sameline]]
         [[Link
@@ -200,45 +332,132 @@ def test():
         [[Link&nbsp;8]]
         [[End test]]
     """
-    for t, link in get_links(text):
-        print '"'+link+'"'
+    out = [
+        (0, 'LinkOne'),
+        (0, 'Sameline'),
+        (0, 'Link 2'),
+        (0, 'Link 3'),
+        (0, 'Link 4'),
+        (0, 'Link 5'),
+        (0, 'Smallcase'),
+        (0, 'Link6'),
+        (0, 'Link 7'),
+        (0, 'Link"'),
+        (0, 'Link 8'),
+        (0, 'End test')
+    ]
+    #for t, link in get_links(text): print '"'+link+'"'
     it = get_links(text)
-    assert(it.next() == (0, 'LinkOne'))
-    assert(it.next() == (0, 'Sameline'))
-    assert(it.next() == (0, 'Link 2'))
-    assert(it.next() == (0, 'Link 3'))
-    assert(it.next() == (0, 'Link 4'))
-    assert(it.next() == (0, 'Link 5'))
-    assert(it.next() == (0, 'Smallcase'))
-    assert(it.next() == (0, 'Link6'))
-    assert(it.next() == (0, 'Link 7'))
-    assert(it.next() == (0, 'Link"'))
-    assert(it.next() == (0, 'Link 8'))
-    assert(it.next() == (0, 'End test'))
+    for expected in out:
+        assert(it.next() == expected)
 
-class A():
-    def start(self, name, attrs):
+    text = """
+        sdfsdf
+
+        sdf
+
+        {{asdads}}
+
+        #redirect [[hahah]] [[adsasd]]
+
+    """
+    assert( get_redirect(text) == 'Hahah' )
+
+def get_dump_files():
+    """ Based on conf.py generate list of all dump files """
+    for file_name in os.listdir('dumps'):
+        if file_name.startswith(conf.DUMPFILES[0]) and \
+                file_name.endswith(conf.DUMPFILES[1]):
+            yield 'dumps/'+file_name
+
+class MyRedis(object):
+    """ Trivial Redis db used for testing
+    Don't use it, does not save keys persistently """
+    def __init__(self):
+        self.m = {}
+    def set(self, name, value):
+        self.m[name] = value
+    def get(self, name):
+        return self.m[name]
+    def incr(self, name):
+        self.m[name] += 1
+        return self.m[name]
+    def setnx(self, name, value):
+        if name in self.m:
+            return 0
+        else:
+            self.set(name, value)
+            return 1
+    def sadd(self, set_, element):
+        pass
+
+def get_parsers():
+    p = xml.parsers.expat.ParserCreate()
+    wiki_parse = WikiXmlParser()
+
+    # Configure
+    p.buffer_text = True
+    p.StartElementHandler = lambda name, attrs: \
+            wiki_parse.start_element(name, attrs)
+    p.EndElementHandler = lambda name: \
+            wiki_parse.end_element(name)
+    p.CharacterDataHandler = lambda data: \
+            wiki_parse.char_data(data)
+    return p, wiki_parse
 
 
 def main():
-    #Some unit tests
-    test()
+    # Create Parser
+    p, wiki_parse = get_parsers()
 
-    #Create Parser
-    p = xml.parsers.expat.ParserCreate()
+    # Connect to redis
+    db = redis.Redis(host=conf.REDIS_HOST, 
+            port=conf.REDIS_PORT, db=conf.REDIS_DB)
+    #db = MyRedis()
 
-    p.StartElementHandler = start_element
-    p.EndElementHandler = end_element
-    p.CharacterDataHandler = char_data
-    p.buffer_text = True
+    if True:#Stage 1
+        # Reset counters to zero
+        db.set('next:page_id', 0)
+        db.set('next:category_id', 0)
 
-    for i in xrange(1,100):
-        try:
-            with open(conf.DUMPFILES % i, 'r') as f: p.ParseFile(f)
-        except IOError:
-            break #no more files
+        # First stage is only geting a list of valid pages and redirects
+        wiki_parse.set_page_callback(lambda doc: process_page_stage1(doc, db))
+     
+        t0 = time.clock()
+        for file_name in get_dump_files():
+            with open(file_name, 'rb') as f:
+                p.ParseFile(f)
+        print 'Stage 1,', time.clock() - t0, "seconds processing time"
+        print 'Titles:', len(db.keys(pattern = 'page:*'))
+        print 'Redirects:', len(db.keys(pattern = 'redirect:*'))
+        print 'Unique pages:', db.get('next:page_id')
+
+    if True:#Stage 2
+        t0 = time.clock()
+        # Resolve redirects
+        for redirect in db.keys(pattern = 'redirect:*'):
+            resolve_redirect(redirect, db)
+        print 'Stage 2,', time.clock() - t0, "seconds processing time"
+        print 'Titles:', len(db.keys(pattern = 'page:*'))
+        print 'Unresolved redirects:', len(db.keys(pattern = 'redirect:*'))
+
+    # Recreate parsers
+    p, wiki_parse = get_parsers()
+
+    if True:#Stage 3
+        t0 = time.clock()
+        with open('graph_cat.bin','wb') as f_cats:
+            with open('graph_pages.bin','wb') as f_pages:
+                wiki_parse.set_page_callback(lambda doc:
+                    process_page_stage3(doc, f_pages, f_cats, db))
+                for file_name in get_dump_files():
+                    with open(file_name, 'rb') as f:
+                        p.ParseFile(f)
+        print 'Stage 3,', time.clock() - t0, "seconds processing time"
+        print 'Categories:', len(db.keys(pattern = 'category:*'))
+        print 'Categories:', db.get('next:category_id')
 
 if __name__ == '__main__':
+    test() #Some simple tests
     main()
-
 
