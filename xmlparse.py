@@ -11,16 +11,19 @@ import bz2
 #app specific imports
 import conf
 import langcodes
+from logger import setup_logger
 
 REDIR_REGEX = re.compile(
-            r'^[^\[]*' # preceeding text that does not contain [
-            + '(' # start group
-            + '#redirect' # keyword
+              '#redirect' # keyword
             + '\s*:?\s*'  # space and potential colon
-            + r'\[\[[^\[]*?\]\]' # regular link
-            + ')', # end group
-            re.DOTALL | re.IGNORECASE
-        )
+            + r'\[\[.+?\]\]', # regular link
+            re.DOTALL | re.IGNORECASE )
+
+NOWIKI_REGEX = re.compile(
+              '<nowiki[^>]*>' # open tag
+            + '.*?' # text between tags
+            + '</nowiki[^>]*>', # close tag
+            re.DOTALL | re.IGNORECASE )
 
 def sha1(text):
     """ Compute hex sha1 of unicode string """
@@ -40,15 +43,14 @@ class WikiXmlParser(object):
     """ Contains handlers for expat parser, sample usage:
 
             p = xml.parsers.expat.ParserCreate()
-            wiki_parse = WikiXmlParser(process_page_callback)
+            w = WikiXmlParser(process_page_callback)
 
             p.StartElementHandler = lambda name, attrs: \
-                    wiki_parse.start_element(name, attrs)
+                    w.start_element(name, attrs)
             p.EndElementHandler = lambda name: \
-                    wiki_parse.end_element(name)
+                    w.end_element(name)
             p.CharacterDataHandler = lambda data: \
-                    wiki_parse.char_data(data)
-    
+                    w.char_data(data)
     """
     def __init__(self):
         self.state = DocState()
@@ -99,7 +101,7 @@ class WikiXmlParser(object):
 # File:mediawiki-1.16-1/includes/Title.php
 #  365     protected static function newFromRedirectInternal( $text ) {
 
-def process_page_stage1(doc, db):
+def process_page_stage1(doc, db, logger):
     """ 
         Complete wiki page, data is in doc.text and doc.title 
         In step1 we only care about valid pages and redirects.
@@ -107,13 +109,14 @@ def process_page_stage1(doc, db):
     text = ''.join(doc.text)
     title = ''.join(doc.title)
     assert(len(title)>0)
-    assert(len(text)>1)
+
+    text = remove_nowiki(text)
 
     sha1_title = sha1(title)
     # Store title for easier lookup
     db.set('title:'+sha1_title, title)
 
-    redirect = get_redirect(text)
+    redirect = get_redirect(text, logger)
     if redirect:
         db.set('redirect:'+sha1_title, sha1(redirect))
     else:
@@ -126,18 +129,19 @@ def write_edges_file(node_id, links, fout):
     for link in links:
         fout.write(struct.pack('i',int(link)))
 
-def process_page_stage3(doc, f_pages, f_cats, db):
+def process_page_stage3(doc, f_pages, f_cats, db, logger):
     """ Complete wiki page, data is in doc.text and doc.title 
     """
     text = ''.join(doc.text)
     title = ''.join(doc.title)
 
+    text = remove_nowiki(text)
+
     assert(len(title)>0)
-    assert(len(text)>1)
 
     sha1_title = sha1(title)
 
-    redirect = get_redirect(text)
+    redirect = get_redirect(text, logger)
     if redirect:
         pass
     else:
@@ -190,7 +194,7 @@ def get_links(text):
     # description we are linked to another page. I am not interested in
     # image links, only page links and category links
     #
-    for link in re.findall(r'\[\[([^\[]*?)\]\]', text):
+    for link in re.findall(r'\[\[(.+?)\]\]', text):
         # Remove left blank space
         link = link.lstrip()
         # Potentially blank
@@ -244,7 +248,7 @@ def get_links(text):
     # Opening '[[' not followed by ']]' and vice versa 
     # can appear only for images and I don't care about images
 
-def get_redirect(text):
+def get_redirect(text, logger=None):
     # Skip pages that don't mention #redirect
     # and pages longer than threshold
     if len(text) > conf.REDIRECT_TH or \
@@ -254,20 +258,18 @@ def get_redirect(text):
     redir = REDIR_REGEX.search(text)
     if redir:
         # reuse code from get_links since link handling is complex
-        links = list(get_links(redir.group(1)))
-        if len(links) > 1:
-            print 'Found too many links'
-            print links
-            print '========'
-            print text
-            print '========'
-            return
+        links = list(get_links(redir.group()))
+        assert(len(links) <= 1)
         # Take redirects to regular page only
         if len(links) and links[0][0] == 0:
             return links[0][1]
-    elif '#redirect' in text.lower():
-        print '==== potential miss of redirect ===='
-        print text
+    elif '#redirect' in text.lower() and logger:
+        logger.warn('==== potential miss of redirect ====')
+        logger.warn(text)
+        logger.warn( '=====================')
+
+def remove_nowiki(text):
+    return NOWIKI_REGEX.sub('', text)
 
 def resolve_redirect(key, db):
     redirpage = key.split(':')[1]
@@ -331,6 +333,9 @@ def test():
         [[Link%207]]
         [[Link&quot;]]
         [[Link&nbsp;8]]
+        [[Uniform polyexon#The E7 [33,2,1] family (3 21)]]
+        [[Uniform polyexon [33,2,1] family (3 21)]]
+        <nowiki>[[Nolink]]</nowiki> < nowiki>[[Yeslink]]</nowiki>
         [[End test]]
     """
     out = [
@@ -345,8 +350,12 @@ def test():
         (0, 'Link 7'),
         (0, 'Link"'),
         (0, 'Link 8'),
+        (0, 'Uniform polyexon'),
+        (0, 'Uniform polyexon [33,2,1] family (3 21)'),
+        (0, 'Yeslink'),
         (0, 'End test')
     ]
+    text = remove_nowiki(text)
     #for t, link in get_links(text): print '"'+link+'"'
     it = get_links(text)
     for expected in out:
@@ -363,6 +372,12 @@ def test():
 
     """
     assert( get_redirect(text) == 'Hahah' )
+
+    text = """
+        {{asdads}}
+        #redirect [[hahah[] 2]] [[adsasd]]
+    """
+    assert( get_redirect(text) == 'Hahah[] 2' )
 
 def get_dump_files():
     """ Based on conf.py generate list of all dump files """
@@ -406,6 +421,7 @@ def get_parsers():
     return parser, wiki_parse
 
 def main():
+    logger = setup_logger()
     # Create Parser
     parser, wiki_parse = get_parsers()
 
@@ -418,11 +434,14 @@ def main():
         db.set('next:page_id', 0)
         db.set('next:category_id', 0)
 
+        logger.info('Starting stage 1')
         # First stage is only geting a list of valid pages and redirects
-        wiki_parse.set_page_callback(lambda doc: process_page_stage1(doc, db))
+        wiki_parse.set_page_callback(lambda doc: 
+                process_page_stage1(doc, db, logger))
      
         t0 = time.clock()
         for file_name in get_dump_files():
+            logger.info('Processing file' + file_name)
             # Plain text XML files
             if file_name.endswith('.xml'):
                 with open(file_name, 'rb') as f: parser.ParseFile(f)
@@ -431,30 +450,34 @@ def main():
                 f = bz2.BZ2File(file_name, 'rb')
                 parser.ParseFile(f)
                 f.close()
-        print 'Stage 1,', time.clock() - t0, "seconds processing time"
-        print 'Titles:', len(db.keys(pattern = 'page:*'))
-        print 'Redirects:', len(db.keys(pattern = 'redirect:*'))
-        print 'Unique pages:', db.get('next:page_id')
+        logger.info('Stage 1, '+str(time.clock()-t0)+" seconds processing time")
+        #logger.info('Titles:'+str( len(db.keys(pattern = 'page:*'))))
+        #logger.info('Redirects:'+str(len(db.keys(pattern = 'redirect:*')) ))
+        logger.info('Unique pages:'+ db.get('next:page_id') )
 
     if True:#Stage 2
         t0 = time.clock()
+        logger.info('Starting stage 2')
         # Resolve redirects
         for redirect in db.keys(pattern = 'redirect:*'):
             resolve_redirect(redirect, db)
-        print 'Stage 2,', time.clock() - t0, "seconds processing time"
-        print 'Titles:', len(db.keys(pattern = 'page:*'))
-        print 'Unresolved redirects:', len(db.keys(pattern = 'redirect:*'))
+        logger.info('Stage 2, '+str(time.clock()-t0)+" seconds processing time")
+        #logger.info('Titles:'+str(len(db.keys(pattern = 'page:*'))))
+        logger.info('Unresolved redirects:' +
+                str(len(db.keys(pattern = 'redirect:*'))))
 
     # Recreate parsers
     parser, wiki_parse = get_parsers()
 
     if True:#Stage 3
         t0 = time.clock()
+        logger.info('Starting stage 3')
         with open('graph_cat.bin','wb') as f_cats:
             with open('graph_pages.bin','wb') as f_pages:
                 wiki_parse.set_page_callback(lambda doc:
-                    process_page_stage3(doc, f_pages, f_cats, db))
+                    process_page_stage3(doc, f_pages, f_cats, db, logger))
                 for file_name in get_dump_files():
+                    logger.info( 'Processing file'+ file_name )
                     # Plain text XML files
                     if file_name.endswith('.xml'):
                         with open(file_name, 'rb') as f:
@@ -464,9 +487,8 @@ def main():
                         f = bz2.BZ2File(file_name, 'rb')
                         parser.ParseFile(f)
                         f.close()
-        print 'Stage 3,', time.clock() - t0, "seconds processing time"
-        print 'Categories:', len(db.keys(pattern = 'category:*'))
-        print 'Categories:', db.get('next:category_id')
+        logger.info('Stage 3, '+str(time.clock()-t0)+" seconds processing time")
+        logger.info('Categories:'+ db.get('next:category_id') )
 
 if __name__ == '__main__':
     test() #Some simple tests

@@ -3,3 +3,5 @@ dumps
 tmp
 Your momma's so fat, I had to include her in .gitignore
 *.bin
+*.swp
+log.txt

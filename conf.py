@@ -2,6 +2,12 @@
 # Located in dumps folder, specify only first common part
 DUMPFILES = "enwiki-20110115-pages-articles"
 
+# Write log
+LOGFILE = 'log.txt'
+
+# Select debug mode
+DEBUG = 1
+
 # Which namespaces to ignore, all lowercase
 NAMESPACES = [ u'file', u'image',
     u's', u'user', u'template', u'wiktionary', u'wikt', 
