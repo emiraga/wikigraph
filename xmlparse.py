@@ -6,6 +6,7 @@ import xml.parsers.expat
 import hashlib
 import redis
 import struct
+import bz2
 
 #app specific imports
 import conf
@@ -366,8 +367,7 @@ def test():
 def get_dump_files():
     """ Based on conf.py generate list of all dump files """
     for file_name in os.listdir('dumps'):
-        if file_name.startswith(conf.DUMPFILES[0]) and \
-                file_name.endswith(conf.DUMPFILES[1]):
+        if file_name.startswith(conf.DUMPFILES):
             yield 'dumps/'+file_name
 
 class MyRedis(object):
@@ -392,28 +392,26 @@ class MyRedis(object):
         pass
 
 def get_parsers():
-    p = xml.parsers.expat.ParserCreate()
+    parser = xml.parsers.expat.ParserCreate()
     wiki_parse = WikiXmlParser()
 
     # Configure
-    p.buffer_text = True
-    p.StartElementHandler = lambda name, attrs: \
+    parser.buffer_text = True
+    parser.StartElementHandler = lambda name, attrs: \
             wiki_parse.start_element(name, attrs)
-    p.EndElementHandler = lambda name: \
+    parser.EndElementHandler = lambda name: \
             wiki_parse.end_element(name)
-    p.CharacterDataHandler = lambda data: \
+    parser.CharacterDataHandler = lambda data: \
             wiki_parse.char_data(data)
-    return p, wiki_parse
-
+    return parser, wiki_parse
 
 def main():
     # Create Parser
-    p, wiki_parse = get_parsers()
+    parser, wiki_parse = get_parsers()
 
     # Connect to redis
     db = redis.Redis(host=conf.REDIS_HOST, 
             port=conf.REDIS_PORT, db=conf.REDIS_DB)
-    #db = MyRedis()
 
     if True:#Stage 1
         # Reset counters to zero
@@ -425,8 +423,14 @@ def main():
      
         t0 = time.clock()
         for file_name in get_dump_files():
-            with open(file_name, 'rb') as f:
-                p.ParseFile(f)
+            # Plain text XML files
+            if file_name.endswith('.xml'):
+                with open(file_name, 'rb') as f: parser.ParseFile(f)
+            # Compressed XML with bz2
+            elif file_name.endswith('.xml.bz2'):
+                f = bz2.BZ2File(file_name, 'rb')
+                parser.ParseFile(f)
+                f.close()
         print 'Stage 1,', time.clock() - t0, "seconds processing time"
         print 'Titles:', len(db.keys(pattern = 'page:*'))
         print 'Redirects:', len(db.keys(pattern = 'redirect:*'))
@@ -442,7 +446,7 @@ def main():
         print 'Unresolved redirects:', len(db.keys(pattern = 'redirect:*'))
 
     # Recreate parsers
-    p, wiki_parse = get_parsers()
+    parser, wiki_parse = get_parsers()
 
     if True:#Stage 3
         t0 = time.clock()
@@ -451,8 +455,15 @@ def main():
                 wiki_parse.set_page_callback(lambda doc:
                     process_page_stage3(doc, f_pages, f_cats, db))
                 for file_name in get_dump_files():
-                    with open(file_name, 'rb') as f:
-                        p.ParseFile(f)
+                    # Plain text XML files
+                    if file_name.endswith('.xml'):
+                        with open(file_name, 'rb') as f:
+                            parser.ParseFile(f)
+                    # Compressed XML with bz2
+                    elif file_name.endswith('.xml.bz2'):
+                        f = bz2.BZ2File(file_name, 'rb')
+                        parser.ParseFile(f)
+                        f.close()
         print 'Stage 3,', time.clock() - t0, "seconds processing time"
         print 'Categories:', len(db.keys(pattern = 'category:*'))
         print 'Categories:', db.get('next:category_id')

@@ -1,6 +1,6 @@
 
-# Located in dumps folder, specify only first common part and extension
-DUMPFILES = "enwiki-20110115-pages-articles",".xml"
+# Located in dumps folder, specify only first common part
+DUMPFILES = "enwiki-20110115-pages-articles"
 
 # Which namespaces to ignore, all lowercase
 NAMESPACES = [ u'file', u'image',
