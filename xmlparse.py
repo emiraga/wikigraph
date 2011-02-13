@@ -14,8 +14,9 @@ import langcodes
 from logger import setup_logger
 
 REDIR_REGEX = re.compile(
-              '#redirect' # keyword
-            + '\s*:?\s*'  # space and potential colon
+            r'^\s*' #from beginning followed by space
+            + '#redirect' # keyword
+            + r'\s*:?\s*'  # space and potential colon
             + r'\[\[.+?\]\]', # regular link
             re.DOTALL | re.IGNORECASE )
 
@@ -24,6 +25,12 @@ NOWIKI_REGEX = re.compile(
             + '.*?' # text between tags
             + '</nowiki[^>]*>', # close tag
             re.DOTALL | re.IGNORECASE )
+
+LINKS_REGEX = re.compile(
+              r'\[\[' # open [[
+            + r'(.+?)' # non-greedily match the middle
+            + r'\]\]' # close ]]
+        )
 
 def sha1(text):
     """ Compute hex sha1 of unicode string """
@@ -43,7 +50,7 @@ class WikiXmlParser(object):
     """ Contains handlers for expat parser, sample usage:
 
             p = xml.parsers.expat.ParserCreate()
-            w = WikiXmlParser(process_page_callback)
+            w = WikiXmlParser()
 
             p.StartElementHandler = lambda name, attrs: \
                     w.start_element(name, attrs)
@@ -51,6 +58,8 @@ class WikiXmlParser(object):
                     w.end_element(name)
             p.CharacterDataHandler = lambda data: \
                     w.char_data(data)
+
+            w.set_page_callback(lambda doc: ... )
     """
     def __init__(self):
         self.state = DocState()
@@ -116,7 +125,7 @@ def process_page_stage1(doc, db, logger):
     # Store title for easier lookup
     db.set('title:'+sha1_title, title)
 
-    redirect = get_redirect(text, logger)
+    redirect = get_redirect(text)
     if redirect:
         db.set('redirect:'+sha1_title, sha1(redirect))
     else:
@@ -141,7 +150,7 @@ def process_page_stage3(doc, f_pages, f_cats, db, logger):
 
     sha1_title = sha1(title)
 
-    redirect = get_redirect(text, logger)
+    redirect = get_redirect(text)
     if redirect:
         pass
     else:
@@ -161,25 +170,36 @@ def process_page_stage3(doc, f_pages, f_cats, db, logger):
                 cat_id = get_category_id(link, db)
                 cat_links.append(cat_id)
                 # Add this page set set
-                db.sadd('pages_in_cat:'+str(cat_id), page_id)
+                # db.sadd('pages_in_cat:'+str(cat_id), page_id)
             else:
                 raise Exception('Unknown link type')
         write_edges_file(page_id, page_links, f_pages)
         write_edges_file(page_id, cat_links, f_cats)
 
 def get_category_id(cat_name, db):
+    """ Return a category_id from name of category """
     sha1_name = sha1(cat_name)
+
+    cat_id = db.get('category:'+sha1_name)
+    if cat_id:
+        return cat_id
+
     # Keys with pattern 'title:*' are shared between pages and categories
     db.set('title:'+sha1_name, cat_name)
 
+    # One problem here is that sometimes catagory ID's will be unused
+    cat_id = db.incr('next:category_id')
     # Check if category already exists
-    if db.setnx('category:'+sha1_name, 0):
+    if db.setnx('category:'+sha1_name, cat_id):
         # This is the first time we see this category
-        cat_id = db.incr('next:category_id')
-        db.set('category:'+sha1_name, cat_id )
+        return cat_id
     else:
-        cat_id = db.get('category:'+sha1_name)
-    return cat_id
+        # Someone else did set this value, yikes. Record unused ID.
+        db.sadd('unused_category_ids',cat_id)
+        # If this client dies unused cat ID will not be recorded.
+
+        # Return actual ID
+        return db.get('category:'+sha1_name)
 
 ##
 # Parse links, too much magic going on here
@@ -194,7 +214,7 @@ def get_links(text):
     # description we are linked to another page. I am not interested in
     # image links, only page links and category links
     #
-    for link in re.findall(r'\[\[(.+?)\]\]', text):
+    for link in LINKS_REGEX.findall(text):
         # Remove left blank space
         link = link.lstrip()
         # Potentially blank
@@ -248,14 +268,15 @@ def get_links(text):
     # Opening '[[' not followed by ']]' and vice versa 
     # can appear only for images and I don't care about images
 
-def get_redirect(text, logger=None):
+def get_redirect(text):
     # Skip pages that don't mention #redirect
     # and pages longer than threshold
-    if len(text) > conf.REDIRECT_TH or \
-            not '#redirect' in text.lower():
+    if len(text) > conf.REDIRECT_TH:
+    #or \
+    #        not '#redirect' in text.lower():
         return
 
-    redir = REDIR_REGEX.search(text)
+    redir = REDIR_REGEX.match(text)
     if redir:
         # reuse code from get_links since link handling is complex
         links = list(get_links(redir.group()))
@@ -263,10 +284,6 @@ def get_redirect(text, logger=None):
         # Take redirects to regular page only
         if len(links) and links[0][0] == 0:
             return links[0][1]
-    elif '#redirect' in text.lower() and logger:
-        logger.warn('==== potential miss of redirect ====')
-        logger.warn(text)
-        logger.warn( '=====================')
 
 def remove_nowiki(text):
     return NOWIKI_REGEX.sub('', text)
@@ -319,66 +336,6 @@ def unescape_html(text):
         return text # leave as is
     return re.sub("&#?\w+;", fixup, text)
 
-def test():
-    """ Run couple of tests, not comprehensive """
-    text = u""" 
-        [[LinkOne]] [[Sameline]]
-        [[Link
-        [[Link  _ 2#a|b]]
-        [[Link__3#a|b]]
-        [[Link___4#a|b]]
-        [[Link____5#a|b]]
-        [[smallcase]]
-        [[   Link6    #sdffsf|asdfdsf]]
-        [[Link%207]]
-        [[Link&quot;]]
-        [[Link&nbsp;8]]
-        [[Uniform polyexon#The E7 [33,2,1] family (3 21)]]
-        [[Uniform polyexon [33,2,1] family (3 21)]]
-        <nowiki>[[Nolink]]</nowiki> < nowiki>[[Yeslink]]</nowiki>
-        [[End test]]
-    """
-    out = [
-        (0, 'LinkOne'),
-        (0, 'Sameline'),
-        (0, 'Link 2'),
-        (0, 'Link 3'),
-        (0, 'Link 4'),
-        (0, 'Link 5'),
-        (0, 'Smallcase'),
-        (0, 'Link6'),
-        (0, 'Link 7'),
-        (0, 'Link"'),
-        (0, 'Link 8'),
-        (0, 'Uniform polyexon'),
-        (0, 'Uniform polyexon [33,2,1] family (3 21)'),
-        (0, 'Yeslink'),
-        (0, 'End test')
-    ]
-    text = remove_nowiki(text)
-    #for t, link in get_links(text): print '"'+link+'"'
-    it = get_links(text)
-    for expected in out:
-        assert(it.next() == expected)
-
-    text = """
-        sdfsdf
-
-        sdf
-
-        {{asdads}}
-
-        #redirect [[hahah]] [[adsasd]]
-
-    """
-    assert( get_redirect(text) == 'Hahah' )
-
-    text = """
-        {{asdads}}
-        #redirect [[hahah[] 2]] [[adsasd]]
-    """
-    assert( get_redirect(text) == 'Hahah[] 2' )
-
 def get_dump_files():
     """ Based on conf.py generate list of all dump files """
     for file_name in os.listdir('dumps'):
@@ -393,10 +350,10 @@ class MyRedis(object):
     def set(self, name, value):
         self.m[name] = value
     def get(self, name):
-        return self.m[name]
+        return str(self.m[name])
     def incr(self, name):
         self.m[name] += 1
-        return self.m[name]
+        return str(self.m[name])
     def setnx(self, name, value):
         if name in self.m:
             return 0
@@ -405,8 +362,11 @@ class MyRedis(object):
             return 1
     def sadd(self, set_, element):
         pass
+    def keys(self, pattern):
+        return []
 
 def get_parsers():
+    """ Creates a pair of parsers """
     parser = xml.parsers.expat.ParserCreate()
     wiki_parse = WikiXmlParser()
 
@@ -490,7 +450,64 @@ def main():
         logger.info('Stage 3, '+str(time.clock()-t0)+" seconds processing time")
         logger.info('Categories:'+ db.get('next:category_id') )
 
+def test():
+    """ Run couple of tests, not comprehensive """
+    text = u""" 
+        [[LinkOne]] [[Sameline]]
+        [[Link
+        [[Link  _ 2#a|b]]
+        [[Link__3#a|b]]
+        [[Link___4#a|b]]
+        [[Link____5#a|b]]
+        [[smallcase]]
+        [[   Link6    #sdffsf|asdfdsf]]
+        [[Link%207]]
+        [[Link&quot;]]
+        [[Link&nbsp;8]]
+        [[Uniform polyexon#The E7 [33,2,1] family (3 21)]]
+        [[Uniform polyexon [33,2,1] family (3 21)]]
+        <nowiki>[[Nolink]]</nowiki> < nowiki>[[Yeslink]]</nowiki>
+        <code>[[Link 9]]</code>
+        [[File:A.jpg| [[No Match]]    //this is not matched
+        [[File:A.jpg| [[No Match]] ]] //this is not matched
+        [[End test]]
+    """
+    out = [
+        (0, 'LinkOne'),
+        (0, 'Sameline'),
+        (0, 'Link 2'),
+        (0, 'Link 3'),
+        (0, 'Link 4'),
+        (0, 'Link 5'),
+        (0, 'Smallcase'),
+        (0, 'Link6'),
+        (0, 'Link 7'),
+        (0, 'Link"'),
+        (0, 'Link 8'),
+        (0, 'Uniform polyexon'),
+        (0, 'Uniform polyexon [33,2,1] family (3 21)'),
+        (0, 'Yeslink'),
+        (0, 'Link 9'),
+        (0, 'End test')
+    ]
+    text = remove_nowiki(text)
+    for t, link in get_links(text): print '"'+link+'"'
+    it = get_links(text)
+    for expected in out:
+        assert(it.next() == expected)
+
+    text = """
+        #reDirEct [[hahah[] 2]] [[adsasd]]
+    """
+    assert( get_redirect(text) == 'Hahah[] 2' )
+
+    text = """<code>#redirect [[Link]]</code>"""
+    assert( get_redirect(text) == None )
+
+    text = """.#redirect [[Link]]</code>"""
+    assert( get_redirect(text) == None )
+
 if __name__ == '__main__':
-    test() #Some simple tests
+    test()
     main()
 
