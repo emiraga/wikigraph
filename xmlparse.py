@@ -346,6 +346,10 @@ class Database(object):
         # Use regular python logging facility
         self.logger = setup_logger()
 
+    def close(self):
+        self.names.close()
+        self.cat_page.close()
+
     def log_info(self, msg):
         self.logger.info(msg)
     
@@ -375,7 +379,7 @@ class Database(object):
     def get_page_id(self, h_title):
         return self.redis.get('page:'+h_title)
 
-    def resolve_redirect(self, key):
+    def resolve_redirect(self, key, visited):
         redirpage = key.split(':')[1]
         if self.redis.exists('page:'+redirpage):
             self.redis.delete(key) # just in case
@@ -384,8 +388,13 @@ class Database(object):
         if target == None:
             return # it's not there
 
+        if target in visited:
+            self.log_info('Found a redirect loop involving: '+str(visited))
+            return
+        visited.add(target)
+
         # In case of multiple redirects resolve them recursively
-        self.resolve_redirect('redirect:'+target)
+        self.resolve_redirect('redirect:'+target, visited)
         
         # Try to get page_id directly
         page_id = self.redis.get('page:'+target)
@@ -422,68 +431,74 @@ class Database(object):
         self.cat_page.write(struct.pack('i',int(page_id)))
 
 def main():
-    # Create Parser
-    parser, wiki_parse = get_parsers()
-
     # Connect to redis
     db = Database(conf)
 
-    if True:#Stage 1
+    if False and True:#Stage 1
         t0 = time.clock()
         db.log_info('Starting stage 1')
-        main_stage1(parser, wiki_parse, db)
+        main_stage1(db)
         db.log_info('Stage 1, '+str(time.clock()-t0)+" seconds processing time")
         db.log_info('Unique pages:'+ db.get('next:page_id') )
 
     if True:#Stage 2
         t0 = time.clock()
         db.log_info('Starting stage 2')
-        main_stage2(parser, wiki_parse, db)
+        main_stage2(db)
         db.log_info('Stage 2, '+str(time.clock()-t0)+" seconds processing time")
         db.log_info('Unresolved redirects:' +
                 str(len(db.keys(pattern = 'redirect:*'))))
 
-    # Recreate parsers
-    parser, wiki_parse = get_parsers()
-
-    if True:#Stage 3
+    if False and True:#Stage 3
         t0 = time.clock()
         db.log_info('Starting stage 3')
-        main_stage3(parser, wiki_parse, db)
+        main_stage3(db)
         db.log_info('Stage 3, '+str(time.clock()-t0)+" seconds processing time")
         db.log_info('Categories:'+ db.get('next:category_id') )
 
-def main_stage1(parser, wiki_parse, db):
+    db.close()
+
+def main_stage1(db):
     # Reset counters to zero
     db.set('next:page_id', 0)
     db.set('next:category_id', 0)
-    # First stage is only geting a list of valid pages and redirects
-    wiki_parse.set_page_callback(lambda doc: 
-            process_page_stage1(doc, db))
  
     for file_name in get_dump_files():
         db.log_info('Processing file' + file_name)
+        # Create Parsers
+        parser, wiki_parse = get_parsers()
+        # First stage is only geting a list of valid pages and redirects
+        wiki_parse.set_page_callback(lambda doc: 
+                process_page_stage1(doc, db))
         # Plain text XML files
         if file_name.endswith('.xml'):
-            with open(file_name, 'rb') as f: parser.ParseFile(f)
+            with open(file_name, 'rb') as f:
+                parser.ParseFile(f)
         # Compressed XML with bz2
         elif file_name.endswith('.xml.bz2'):
             f = bz2.BZ2File(file_name, 'rb')
             parser.ParseFile(f)
             f.close()
 
-def main_stage2(parser, wiki_parse, db):
+def main_stage2(db):
     # Resolve redirects
-    for redirect in db.keys(pattern = 'redirect:*'):
-        db.resolve_redirect(redirect)
+    for x in xrange(256):
+        # Retrieve keys partially
+        rkeys = db.keys(pattern = 'redirect:%02x*' % x)
+        print "%.1f%%, %5d keys" %( 100.0*x/256, len(rkeys) )
+        for redirect in rkeys:
+            db.resolve_redirect(redirect, set())
 
-def main_stage3(parser, wiki_parse, db):
+def main_stage3(db):
     with open('graph_cat.bin','wb') as f_cats:
         with open('graph_pages.bin','wb') as f_pages:
-            wiki_parse.set_page_callback(lambda doc:
-                process_page_stage3(doc, f_pages, f_cats, db))
             for file_name in get_dump_files():
                 db.log_info( 'Processing file'+ file_name )
+                # Create Parsers
+                parser, wiki_parse = get_parsers()
+                # Third stage is for finding links
+                wiki_parse.set_page_callback(lambda doc:
+                    process_page_stage3(doc, f_pages, f_cats, db))
                 # Plain text XML files
                 if file_name.endswith('.xml'):
                     with open(file_name, 'rb') as f:
