@@ -1,6 +1,6 @@
 
 # Located in dumps folder, specify only first common part
-DUMPFILES = "enwiki-20110115-pages-articles1.xml.bz2" 
+DUMPFILES = "enwiki-20110115-pages-articles"
 
 # Write log
 LOGFILE = 'log.txt'
@@ -14,9 +14,6 @@ NAMESPACES = [ u'file', u'image',
     u'wikipedia', u'wp', u'user_talk', u'help', u'wikisource',
     u'wikibooks', u'portal', u'commons',u'talk',u'media',
     u'wikipedia talk']
-
-# Redirect pages must have less characters than this threshold 
-REDIRECT_TH = 1000
 
 # Database
 REDIS_HOST = 'localhost'

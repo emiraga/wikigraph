@@ -8,10 +8,9 @@ Limitations
 -----------
 
 Redirects:
-  * Redirected pages must have length less than 1000 characters.
   * Only regular page to regular page redirects are valid (no other type such as page to category, etc.)
-  * Adding {{rdf}} template will break redirect in wikipedia and in wikigraph. In that case page with {{rdf}}
-    is considered to have a link to target page.
+  * Adding {{rdf}} on top of the page will break redirect in wikipedia and in wikigraph. In that case 
+    page with {{rdf}} is considered to have a link to target page.
 
 Templates:
   * Templates are not expanded. Links and categories inside a template are not included in the set of
@@ -22,11 +21,12 @@ Parsing performance:
   * xmlparser.py makes two passes through the dump files. First time only collects page names and page redirects.
     Second pass will find links from page to page and page to category.
 
-   -Using only one pass, we would need more memory since for every link on the page, we would have to remember 
+   -Using only one pass, we would need more memory since for every link on the page we would have to remember 
     either hash or the actual page name. This is much larger compared to current 4 bytes of storage per one link.
 
-   -First pass can be replaced by iteration over *.sql.gz files from the public dumps folder of Wikipedia.
+   -First pass can be replaced by an iteration over *.sql.gz files from the public dumps folder of Wikipedia.
     However, I could not find any python library which would parse SQL dumps same way as expat parses XMLs.
-    If parsing speed ever becomes a serious issue, I could make my own parsing library for dumps.
+    If parsing speed ever becomes a serious issue, I could make my own parsing library for dumps, and ultimatelly
+    remove the first pass over *.xml.bz2
 
 

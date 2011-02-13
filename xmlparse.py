@@ -109,8 +109,7 @@ class WikiXmlParser(object):
 # Redirect magic
 # File:mediawiki-1.16-1/includes/Title.php
 #  365     protected static function newFromRedirectInternal( $text ) {
-
-def process_page_stage1(doc, db, logger):
+def process_page_stage1(doc, db):
     """ 
         Complete wiki page, data is in doc.text and doc.title 
         In step1 we only care about valid pages and redirects.
@@ -123,13 +122,13 @@ def process_page_stage1(doc, db, logger):
 
     sha1_title = sha1(title)
     # Store title for easier lookup
-    db.set('title:'+sha1_title, title)
+    db.save_title(sha1_title, title)
 
     redirect = get_redirect(text)
     if redirect:
-        db.set('redirect:'+sha1_title, sha1(redirect))
+        db.set_redirect(sha1_title, sha1(redirect))
     else:
-        db.set('page:'+sha1_title, db.incr('next:page_id'))
+        db.set_page_id(sha1_title, db.incr('next:page_id'))
 
 def write_edges_file(node_id, links, fout):
     """ Write edge list to file in binary format """
@@ -138,7 +137,7 @@ def write_edges_file(node_id, links, fout):
     for link in links:
         fout.write(struct.pack('i',int(link)))
 
-def process_page_stage3(doc, f_pages, f_cats, db, logger):
+def process_page_stage3(doc, f_pages, f_cats, db):
     """ Complete wiki page, data is in doc.text and doc.title 
     """
     text = ''.join(doc.text)
@@ -154,7 +153,7 @@ def process_page_stage3(doc, f_pages, f_cats, db, logger):
     if redirect:
         pass
     else:
-        page_id = db.get('page:'+sha1_title)
+        page_id = db.get_page_id(sha1_title)
         assert(page_id != None)
 
         page_links = []
@@ -163,43 +162,18 @@ def process_page_stage3(doc, f_pages, f_cats, db, logger):
             if link_type == 0:
                 # Find id of the linked page
                 sha1_link = sha1(link)
-                link_id = db.get('page:'+sha1_link)
+                link_id = db.get_page_id(sha1_link)
                 if link_id:
                     page_links.append(link_id)
             elif link_type == 1:
-                cat_id = get_category_id(link, db)
+                cat_id = db.get_category_id(link, sha1(link))
                 cat_links.append(cat_id)
-                # Add this page set set
-                # db.sadd('pages_in_cat:'+str(cat_id), page_id)
+                # Add this page set to category
+                db.add_page_to_cat(cat_id, page_id)
             else:
                 raise Exception('Unknown link type')
         write_edges_file(page_id, page_links, f_pages)
         write_edges_file(page_id, cat_links, f_cats)
-
-def get_category_id(cat_name, db):
-    """ Return a category_id from name of category """
-    sha1_name = sha1(cat_name)
-
-    cat_id = db.get('category:'+sha1_name)
-    if cat_id:
-        return cat_id
-
-    # Keys with pattern 'title:*' are shared between pages and categories
-    db.set('title:'+sha1_name, cat_name)
-
-    # One problem here is that sometimes catagory ID's will be unused
-    cat_id = db.incr('next:category_id')
-    # Check if category already exists
-    if db.setnx('category:'+sha1_name, cat_id):
-        # This is the first time we see this category
-        return cat_id
-    else:
-        # Someone else did set this value, yikes. Record unused ID.
-        db.sadd('unused_category_ids',cat_id)
-        # If this client dies unused cat ID will not be recorded.
-
-        # Return actual ID
-        return db.get('category:'+sha1_name)
 
 ##
 # Parse links, too much magic going on here
@@ -269,13 +243,6 @@ def get_links(text):
     # can appear only for images and I don't care about images
 
 def get_redirect(text):
-    # Skip pages that don't mention #redirect
-    # and pages longer than threshold
-    if len(text) > conf.REDIRECT_TH:
-    #or \
-    #        not '#redirect' in text.lower():
-        return
-
     redir = REDIR_REGEX.match(text)
     if redir:
         # reuse code from get_links since link handling is complex
@@ -288,25 +255,6 @@ def get_redirect(text):
 def remove_nowiki(text):
     return NOWIKI_REGEX.sub('', text)
 
-def resolve_redirect(key, db):
-    redirpage = key.split(':')[1]
-    if db.exists('page:'+redirpage):
-        db.delete(key) # just in case
-        return # already resolved
-    target = db.get(key)
-    if target == None:
-        return # it's not there
-
-    # In case of multiple redirects resolve them recursively
-    resolve_redirect('redirect:'+target, db)
-    
-    # Try to get page_id directly
-    page_id = db.get('page:'+target)
-    if page_id != None:
-        # Set proper page_id and delete redirect
-        db.set('page:'+redirpage, page_id)
-        db.delete(key)
-        return
 
 ##
 # Removes HTML or XML character references and entities from a text string.
@@ -380,29 +328,119 @@ def get_parsers():
             wiki_parse.char_data(data)
     return parser, wiki_parse
 
+class Database(object):
+    """ Persistence models
+    
+    For certain operations redis will be used,
+    whereas for others append-to files
+    """
+    def __init__(self, config):
+        self.redis = redis.Redis(
+            host=config.REDIS_HOST, 
+            port=config.REDIS_PORT,
+            db=config.REDIS_DB)
+        # For mapping hash names to titles regular file is used
+        self.names = open('hash_names','w')
+        # For a link between category and page also file
+        self.cat_page = open('category_page','w')
+        # Use regular python logging facility
+        self.logger = setup_logger()
+
+    def log_info(self, msg):
+        self.logger.info(msg)
+    
+    def incr(self, key):
+        return self.redis.incr(key)
+
+    def get(self, key):
+        return self.redis.get(key)
+
+    def set(self, key, value):
+        return self.redis.set(key, value)
+
+    def keys(self, pattern):
+        return self.redis.keys(pattern=pattern)
+
+    def save_title(self, h_title, value):
+        """ Save the hash to value mapping 
+            Duplication is possible.  """
+        self.names.write((h_title+value+'\n').encode('utf-8'))
+
+    def set_redirect(self, h_title, h_redirect):
+        return self.redis.set('redirect:'+h_title, h_redirect)
+
+    def set_page_id(self, h_title, val):
+        return self.redis.set('page:'+h_title, val)
+
+    def get_page_id(self, h_title):
+        return self.redis.get('page:'+h_title)
+
+    def resolve_redirect(self, key):
+        redirpage = key.split(':')[1]
+        if self.redis.exists('page:'+redirpage):
+            self.redis.delete(key) # just in case
+            return # already resolved
+        target = self.redis.get(key)
+        if target == None:
+            return # it's not there
+
+        # In case of multiple redirects resolve them recursively
+        self.resolve_redirect('redirect:'+target)
+        
+        # Try to get page_id directly
+        page_id = self.redis.get('page:'+target)
+        if page_id != None:
+            # Set proper page_id and delete redirect
+            self.redis.set('page:'+redirpage, page_id)
+            self.redis.delete(key)
+            return
+
+    def get_category_id(self, name, h_name):
+        """ Return a category_id from name of category,
+            or else new category id will be assigned
+        """
+        cat_id = self.redis.get('category:'+h_name)
+        if cat_id:
+            return cat_id
+        # Titles are shared between pages and categories
+        self.save_title(h_name, name)
+        # One problem here is that sometimes category ID's will be unused
+        cat_id = self.redis.incr('next:category_id')
+        # Check if category already exists
+        if self.redis.setnx('category:'+h_name, cat_id):
+            # This is the first time we see this category
+            return cat_id
+        else:
+            # Someone else did set this value, yikes. Record unused ID.
+            # If this client dies unused cat ID will not be recorded.
+            self.redis.sadd('unused_category_ids',cat_id)
+            # Return actual ID
+            return self.redis.get('category:'+h_name)
+    
+    def add_page_to_cat(self, cat_id, page_id):
+        self.cat_page.write(struct.pack('i',int(cat_id)))
+        self.cat_page.write(struct.pack('i',int(page_id)))
+
 def main():
-    logger = setup_logger()
     # Create Parser
     parser, wiki_parse = get_parsers()
 
     # Connect to redis
-    db = redis.Redis(host=conf.REDIS_HOST, 
-            port=conf.REDIS_PORT, db=conf.REDIS_DB)
+    db = Database(conf)
 
     if True:#Stage 1
-        logger.info('Starting stage 1')
         t0 = time.clock()
-        logger.info('Stage 1, '+str(time.clock()-t0)+" seconds processing time")
-        main_stage1(parser, wiki_parse, db, logger)
-        logger.info('Unique pages:'+ db.get('next:page_id') )
+        db.log_info('Starting stage 1')
+        main_stage1(parser, wiki_parse, db)
+        db.log_info('Stage 1, '+str(time.clock()-t0)+" seconds processing time")
+        db.log_info('Unique pages:'+ db.get('next:page_id') )
 
     if True:#Stage 2
         t0 = time.clock()
-        logger.info('Starting stage 2')
-        main_stage2(parser, wiki_parse, db, logger)
-        logger.info('Stage 2, '+str(time.clock()-t0)+" seconds processing time")
-        #logger.info('Titles:'+str(len(db.keys(pattern = 'page:*'))))
-        logger.info('Unresolved redirects:' +
+        db.log_info('Starting stage 2')
+        main_stage2(parser, wiki_parse, db)
+        db.log_info('Stage 2, '+str(time.clock()-t0)+" seconds processing time")
+        db.log_info('Unresolved redirects:' +
                 str(len(db.keys(pattern = 'redirect:*'))))
 
     # Recreate parsers
@@ -410,21 +448,21 @@ def main():
 
     if True:#Stage 3
         t0 = time.clock()
-        logger.info('Starting stage 3')
-        main_stage3(parser, wiki_parse, db, logger)
-        logger.info('Stage 3, '+str(time.clock()-t0)+" seconds processing time")
-        logger.info('Categories:'+ db.get('next:category_id') )
+        db.log_info('Starting stage 3')
+        main_stage3(parser, wiki_parse, db)
+        db.log_info('Stage 3, '+str(time.clock()-t0)+" seconds processing time")
+        db.log_info('Categories:'+ db.get('next:category_id') )
 
-def main_stage1(parser, wiki_parse, db, logger):
+def main_stage1(parser, wiki_parse, db):
     # Reset counters to zero
     db.set('next:page_id', 0)
     db.set('next:category_id', 0)
     # First stage is only geting a list of valid pages and redirects
     wiki_parse.set_page_callback(lambda doc: 
-            process_page_stage1(doc, db, logger))
+            process_page_stage1(doc, db))
  
     for file_name in get_dump_files():
-        logger.info('Processing file' + file_name)
+        db.log_info('Processing file' + file_name)
         # Plain text XML files
         if file_name.endswith('.xml'):
             with open(file_name, 'rb') as f: parser.ParseFile(f)
@@ -434,18 +472,18 @@ def main_stage1(parser, wiki_parse, db, logger):
             parser.ParseFile(f)
             f.close()
 
-def main_stage2(parser, wiki_parse, db, logger):
+def main_stage2(parser, wiki_parse, db):
     # Resolve redirects
     for redirect in db.keys(pattern = 'redirect:*'):
-        resolve_redirect(redirect, db)
+        db.resolve_redirect(redirect)
 
-def main_stage3(parser, wiki_parse, db, logger):
+def main_stage3(parser, wiki_parse, db):
     with open('graph_cat.bin','wb') as f_cats:
         with open('graph_pages.bin','wb') as f_pages:
             wiki_parse.set_page_callback(lambda doc:
-                process_page_stage3(doc, f_pages, f_cats, db, logger))
+                process_page_stage3(doc, f_pages, f_cats, db))
             for file_name in get_dump_files():
-                logger.info( 'Processing file'+ file_name )
+                db.log_info( 'Processing file'+ file_name )
                 # Plain text XML files
                 if file_name.endswith('.xml'):
                     with open(file_name, 'rb') as f:
