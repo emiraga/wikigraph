@@ -88,7 +88,7 @@ class WikiXmlParser(object):
             self.state.in_page = False
             self.process_page(self.state)
             self.count_pages += 1
-            if (self.count_pages % 500) == 0:
+            if (self.count_pages % 1000) == 0:
                 print self.count_pages
         elif name == u'title':
             assert(self.state.in_page)
@@ -390,37 +390,16 @@ def main():
             port=conf.REDIS_PORT, db=conf.REDIS_DB)
 
     if True:#Stage 1
-        # Reset counters to zero
-        db.set('next:page_id', 0)
-        db.set('next:category_id', 0)
-
         logger.info('Starting stage 1')
-        # First stage is only geting a list of valid pages and redirects
-        wiki_parse.set_page_callback(lambda doc: 
-                process_page_stage1(doc, db, logger))
-     
         t0 = time.clock()
-        for file_name in get_dump_files():
-            logger.info('Processing file' + file_name)
-            # Plain text XML files
-            if file_name.endswith('.xml'):
-                with open(file_name, 'rb') as f: parser.ParseFile(f)
-            # Compressed XML with bz2
-            elif file_name.endswith('.xml.bz2'):
-                f = bz2.BZ2File(file_name, 'rb')
-                parser.ParseFile(f)
-                f.close()
         logger.info('Stage 1, '+str(time.clock()-t0)+" seconds processing time")
-        #logger.info('Titles:'+str( len(db.keys(pattern = 'page:*'))))
-        #logger.info('Redirects:'+str(len(db.keys(pattern = 'redirect:*')) ))
+        main_stage1(parser, wiki_parse, db, logger)
         logger.info('Unique pages:'+ db.get('next:page_id') )
 
     if True:#Stage 2
         t0 = time.clock()
         logger.info('Starting stage 2')
-        # Resolve redirects
-        for redirect in db.keys(pattern = 'redirect:*'):
-            resolve_redirect(redirect, db)
+        main_stage2(parser, wiki_parse, db, logger)
         logger.info('Stage 2, '+str(time.clock()-t0)+" seconds processing time")
         #logger.info('Titles:'+str(len(db.keys(pattern = 'page:*'))))
         logger.info('Unresolved redirects:' +
@@ -432,23 +411,50 @@ def main():
     if True:#Stage 3
         t0 = time.clock()
         logger.info('Starting stage 3')
-        with open('graph_cat.bin','wb') as f_cats:
-            with open('graph_pages.bin','wb') as f_pages:
-                wiki_parse.set_page_callback(lambda doc:
-                    process_page_stage3(doc, f_pages, f_cats, db, logger))
-                for file_name in get_dump_files():
-                    logger.info( 'Processing file'+ file_name )
-                    # Plain text XML files
-                    if file_name.endswith('.xml'):
-                        with open(file_name, 'rb') as f:
-                            parser.ParseFile(f)
-                    # Compressed XML with bz2
-                    elif file_name.endswith('.xml.bz2'):
-                        f = bz2.BZ2File(file_name, 'rb')
-                        parser.ParseFile(f)
-                        f.close()
+        main_stage3(parser, wiki_parse, db, logger)
         logger.info('Stage 3, '+str(time.clock()-t0)+" seconds processing time")
         logger.info('Categories:'+ db.get('next:category_id') )
+
+def main_stage1(parser, wiki_parse, db, logger):
+    # Reset counters to zero
+    db.set('next:page_id', 0)
+    db.set('next:category_id', 0)
+    # First stage is only geting a list of valid pages and redirects
+    wiki_parse.set_page_callback(lambda doc: 
+            process_page_stage1(doc, db, logger))
+ 
+    for file_name in get_dump_files():
+        logger.info('Processing file' + file_name)
+        # Plain text XML files
+        if file_name.endswith('.xml'):
+            with open(file_name, 'rb') as f: parser.ParseFile(f)
+        # Compressed XML with bz2
+        elif file_name.endswith('.xml.bz2'):
+            f = bz2.BZ2File(file_name, 'rb')
+            parser.ParseFile(f)
+            f.close()
+
+def main_stage2(parser, wiki_parse, db, logger):
+    # Resolve redirects
+    for redirect in db.keys(pattern = 'redirect:*'):
+        resolve_redirect(redirect, db)
+
+def main_stage3(parser, wiki_parse, db, logger):
+    with open('graph_cat.bin','wb') as f_cats:
+        with open('graph_pages.bin','wb') as f_pages:
+            wiki_parse.set_page_callback(lambda doc:
+                process_page_stage3(doc, f_pages, f_cats, db, logger))
+            for file_name in get_dump_files():
+                logger.info( 'Processing file'+ file_name )
+                # Plain text XML files
+                if file_name.endswith('.xml'):
+                    with open(file_name, 'rb') as f:
+                        parser.ParseFile(f)
+                # Compressed XML with bz2
+                elif file_name.endswith('.xml.bz2'):
+                    f = bz2.BZ2File(file_name, 'rb')
+                    parser.ParseFile(f)
+                    f.close()
 
 def test():
     """ Run couple of tests, not comprehensive """
@@ -491,7 +497,7 @@ def test():
         (0, 'End test')
     ]
     text = remove_nowiki(text)
-    for t, link in get_links(text): print '"'+link+'"'
+    #for t, link in get_links(text): print '"'+link+'"'
     it = get_links(text)
     for expected in out:
         assert(it.next() == expected)
