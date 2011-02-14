@@ -365,26 +365,31 @@ class Database(object):
     def keys(self, pattern):
         return self.redis.keys(pattern=pattern)
 
+    def hkeys(self, key):
+        return self.redis.hkeys(key)
+
     def save_title(self, h_title, value):
         """ Save the hash to value mapping 
             Duplication is possible.  """
         self.names.write((h_title+value+'\n').encode('utf-8'))
 
     def set_redirect(self, h_title, h_redirect):
-        return self.redis.set('redirect:'+h_title, h_redirect)
+        return self.redis.hset('redirect:' + h_title[:20], h_title[20:],
+            h_redirect)
 
     def set_page_id(self, h_title, val):
-        return self.redis.set('page:'+h_title, val)
+        return self.redis.hset('page:'+h_title[:20], h_title[20:], val)
 
     def get_page_id(self, h_title):
-        return self.redis.get('page:'+h_title)
+        return self.redis.hget('page:'+h_title[:20], h_title[20:])
 
     def resolve_redirect(self, key, visited):
         redirpage = key.split(':')[1]
-        if self.redis.exists('page:'+redirpage):
-            self.redis.delete(key) # just in case
+        redirpage1, redirpage2 = redirpage[:20], redirpage[20:]
+
+        if self.redis.hexists('page:'+redirpage1, redirpage2):
             return # already resolved
-        target = self.redis.get(key)
+        target = self.redis.hget('redirect:'+redirpage1, redirpage2)
         if target == None:
             return # it's not there
 
@@ -397,18 +402,19 @@ class Database(object):
         self.resolve_redirect('redirect:'+target, visited)
         
         # Try to get page_id directly
-        page_id = self.redis.get('page:'+target)
+        page_id = self.redis.hget('page:'+target[:20], target[20:])
         if page_id != None:
             # Set proper page_id and delete redirect
-            self.redis.set('page:'+redirpage, page_id)
-            self.redis.delete(key)
+            self.redis.hset('page:'+redirpage1, redirpage2, page_id)
+            self.redis.hdel('redirect:'+redirpage1, redirpage2)
             return
 
     def get_category_id(self, name, h_name):
         """ Return a category_id from name of category,
             or else new category id will be assigned
         """
-        cat_id = self.redis.get('category:'+h_name)
+        h_name1, h_name2 = h_name[:20], h_name[20:]
+        cat_id = self.redis.hget('category:'+h_name1, h_name2)
         if cat_id:
             return cat_id
         # Titles are shared between pages and categories
@@ -416,7 +422,7 @@ class Database(object):
         # One problem here is that sometimes category ID's will be unused
         cat_id = self.redis.incr('next:category_id')
         # Check if category already exists
-        if self.redis.setnx('category:'+h_name, cat_id):
+        if self.redis.hsetnx('category:'+h_name1, h_name2, cat_id):
             # This is the first time we see this category
             return cat_id
         else:
@@ -424,7 +430,7 @@ class Database(object):
             # If this client dies unused cat ID will not be recorded.
             self.redis.sadd('unused_category_ids',cat_id)
             # Return actual ID
-            return self.redis.get('category:'+h_name)
+            return self.redis.hget('category:'+h_name1, h_name2)
     
     def add_page_to_cat(self, cat_id, page_id):
         self.cat_page.write(struct.pack('i',int(cat_id)))
@@ -434,26 +440,26 @@ def main():
     # Connect to redis
     db = Database(conf)
 
-    if False and True:#Stage 1
-        t0 = time.clock()
+    if True:#Stage 1
+        t0 = time.time()
         db.log_info('Starting stage 1')
         main_stage1(db)
-        db.log_info('Stage 1, '+str(time.clock()-t0)+" seconds processing time")
+        db.log_info('Stage 1, '+str(time.time()-t0)+" seconds processing time")
         db.log_info('Unique pages:'+ db.get('next:page_id') )
 
     if True:#Stage 2
-        t0 = time.clock()
+        t0 = time.time()
         db.log_info('Starting stage 2')
         main_stage2(db)
-        db.log_info('Stage 2, '+str(time.clock()-t0)+" seconds processing time")
+        db.log_info('Stage 2, '+str(time.time()-t0)+" seconds processing time")
         db.log_info('Unresolved redirects:' +
                 str(len(db.keys(pattern = 'redirect:*'))))
 
-    if False and True:#Stage 3
-        t0 = time.clock()
+    if True:#Stage 3
+        t0 = time.time()
         db.log_info('Starting stage 3')
         main_stage3(db)
-        db.log_info('Stage 3, '+str(time.clock()-t0)+" seconds processing time")
+        db.log_info('Stage 3, '+str(time.time()-t0)+" seconds processing time")
         db.log_info('Categories:'+ db.get('next:category_id') )
 
     db.close()
@@ -482,12 +488,9 @@ def main_stage1(db):
 
 def main_stage2(db):
     # Resolve redirects
-    for x in xrange(256):
-        # Retrieve keys partially
-        rkeys = db.keys(pattern = 'redirect:%02x*' % x)
-        print "%.1f%%, %5d keys" %( 100.0*x/256, len(rkeys) )
-        for redirect in rkeys:
-            db.resolve_redirect(redirect, set())
+    for redirect1 in db.keys(pattern = 'redirect:*'):
+        for redirect2 in db.hkeys(redirect1):
+            db.resolve_redirect(redirect1 + redirect2, set())
 
 def main_stage3(db):
     with open('graph_cat.bin','wb') as f_cats:

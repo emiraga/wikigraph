@@ -1,6 +1,6 @@
 
 # Located in dumps folder, specify only first common part
-DUMPFILES = "enwiki-20110115-pages-articles1.xml"
+DUMPFILES = "enwiki-20110115-pages-articles"
 
 # Write log
 LOGFILE = 'log.txt'
