@@ -40,9 +40,9 @@ public:
 		stat_handler(null_stat_h),
 		data_handler(null_data_h)
 	{
-		fseek(f, 0, SEEK_END);
-		fsize = ftell(f);
-		fseek(f, 0, SEEK_SET);
+		fseeko(f, 0, SEEK_END);
+		fsize = ftello(f);
+		fseeko(f, 0, SEEK_SET);
 	}
 	void close()
 	{
@@ -121,7 +121,7 @@ private:
 			char c = peek();
 			if(c == '\'')
 				data.push_back( get_quoted_string() );
-			else if(isdigit(c))
+			else if(isdigit(c) || c == '-')
 				data.push_back( get_number() );
 			else
 			{
@@ -195,6 +195,8 @@ private:
 	string get_number()
 	{
 		string out;
+		if(peek() == '-')
+			out += get();
 		while(isdigit(peek()))
 		{
 			out += get();
@@ -256,7 +258,7 @@ private:
 	virtual void read_buffer()
 	{
 		buffer_size = fread(buffer, 1, BSIZE, f);
-		stat_handler( 100.0 * ftell(f) / fsize );
+		stat_handler( 100.0 * ftello(f) / fsize );
 	}
 };
 
@@ -271,7 +273,7 @@ public:
 	virtual void read_buffer()
 	{
 		SqlParser::buffer_size = gzread(fd, SqlParser::buffer, BSIZE);
-		SqlParser::stat_handler( 100.0 * ftell(SqlParser::f) / SqlParser::fsize );
+		SqlParser::stat_handler( 100.0 * lseek(fileno(SqlParser::f), 0, SEEK_CUR) / SqlParser::fsize );
 	}
 };
 
@@ -283,7 +285,7 @@ SqlParser* SqlParser::open(const char *fname)
 
 	char fzname[100];
 	snprintf(fzname, 99, "%s.gz", fname);
-	f = fopen(fname, "rb");
+	f = fopen(fzname, "rb");
 	if(f)
 		return new SqlParserGz(f);
 
