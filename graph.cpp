@@ -13,7 +13,7 @@ using namespace std; // sue me
 
 typedef pair<int, int> pii;
 
-#define MAXNODES 9000000 /* maximum number of articles */
+#define MAXNODES 4000000 /* maximum number of articles */
 
 const int DIST_ARRAY = 100; /* threshold for which distances to use array */
 

@@ -120,15 +120,15 @@ private:
 		{
 			char c = peek();
 			if(c == '\'')
-				data.push_back( get_quoted_string() );
+				data.push_back(get_quoted_string());
 			else if(isdigit(c) || c == '-')
-				data.push_back( get_number() );
+				data.push_back(get_number());
 			else if(c == 'N')
 			{
-				assert(get() == 'N');
-				assert(get() == 'U');
-				assert(get() == 'L');
-				assert(get() == 'L');
+				get();assert(peek() == 'U');
+				get();assert(peek() == 'L');
+				get();assert(peek() == 'L');
+				get();
 			}
 			else
 			{

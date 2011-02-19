@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <algorithm>
 using namespace std;
 
 #include "config.h"
@@ -77,18 +78,36 @@ void calc_md5(const char *str, int len)
 #ifdef USE_LOCAL_STORAGE
 
 #define MAX_WIKI_PAGEID 30500000 // current value is 30480288
-char wikistatus[MAX_WIKI_PAGEID+1]; // 0 - unknown, 1 - regular, 2 - redirect, 3 - resolved redirect
+
+#pragma pack(push)
+#pragma pack(1)     /* set alignment to 1 byte boundary */
+struct wikistatus_t
+{
+	int type:2; // 0 - unknown, 1 - regular, 2 - redirect, 3 - resolved redirect
+	int is_category:1; // 0 - article, 1 - category
+};
+#pragma pack(pop)
+
+wikistatus_t wikistatus[MAX_WIKI_PAGEID+1]; 
+
 int wikigraphId[MAX_WIKI_PAGEID+1];
-// 150MB of memory
+//Total of 150MB of memory
+
+#ifdef USE_REDIS_HASH
+#error "Redis hashes currently don't work, is_category is not implemented"
+int broken[-2]; 
+#endif
 
 #endif /* USE_LOCAL_STORAGE */
 
 /**************
  * STAGE 1
+ * Create graph nodes and store relevant data about nodes
  */
 int graphNodes = 0;
 int article_count, category_count, art_redirect_count, cat_redirect_count;
 
+/* SQL schema */
 #define page_id 0 // int(8) unsigned NOT NULL AUTO_INCREMENT,
 #define page_namespace 1 // int(11) NOT NULL DEFAULT '0',
 #define page_title 2 // varbinary(255) NOT NULL DEFAULT '',
@@ -106,6 +125,11 @@ void page(const vector<string> &data)
 	bool is_redir = data[page_is_redirect][0] == '1';
 	int namespc = atoi(data[page_namespace].c_str());
 
+	int wikiId = atoi(data[page_id].c_str());
+#ifdef USE_LOCAL_STORAGE
+	assert(wikiId <= MAX_WIKI_PAGEID);
+#endif
+
 	const char *prefix;
 	if(namespc == NS_MAIN) //Articles
 	{
@@ -122,14 +146,14 @@ void page(const vector<string> &data)
 			cat_redirect_count++;
 		else
 			category_count++;
+#ifdef USE_LOCAL_STORAGE
+		wikistatus[wikiId].is_category = 1;
+#else
+		int not_implemented[-2];
+#endif
 	}
 	else
 		return; //other namespaces are not interesting
-
-	int wikiId = atoi(data[page_id].c_str());
-#ifdef USE_LOCAL_STORAGE
-	assert(wikiId <= MAX_WIKI_PAGEID);
-#endif
 
 	const char *title = data[page_title].c_str();
 	int title_len = data[page_title].size();
@@ -169,7 +193,7 @@ void page(const vector<string> &data)
 	if(is_redir)
 	{
 #ifdef USE_LOCAL_STORAGE
-		wikistatus[wikiId] = 2; //redirect
+		wikistatus[wikiId].type = 2; //redirect
 #endif
 		reply = (redisReply*)redisCommand(c, "SET w:%d %s%s%s", wikiId, prefix, hash_1, hash_2);
 		freeReplyObject(reply);
@@ -177,7 +201,7 @@ void page(const vector<string> &data)
 	else
 	{
 #ifdef USE_LOCAL_STORAGE
-		wikistatus[wikiId] = 1; //regular
+		wikistatus[wikiId].type = 1; //regular
 		wikigraphId[wikiId] = graphId;
 #else
 		reply = (redisReply*)redisCommand(c, "SET w:%d %d", wikiId, graphId );
@@ -205,6 +229,7 @@ void main_stage1()
 
 /**************
  * STAGE 2
+ * Resolve redirects
  */
 
 int cnt_still_redir;
@@ -214,6 +239,7 @@ void stat_handler2(double percent)
 	printf("  %5.2lf%%  unresolved=%d\n", percent, cnt_still_redir);
 }
 
+/* SQL schema */
 #define rd_from 0 // int(8) unsigned NOT NULL DEFAULT '0',
 #define rd_namespace 1// int(11) NOT NULL DEFAULT '0',
 #define rd_title 2 // varbinary(255) NOT NULL DEFAULT '',
@@ -223,7 +249,7 @@ void redirect(const vector<string> &data)
 	int wikiId = atoi(data[rd_from].c_str());
 	// Check is redirect was resolved previously
 #ifdef USE_LOCAL_STORAGE
-	if(wikistatus[wikiId] != 2)
+	if(wikistatus[wikiId].type != 2)
 		return;
 #else
 	reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId );
@@ -250,13 +276,14 @@ void redirect(const vector<string> &data)
 	int title_len = data[rd_title].size();
 	calc_md5(title, title_len);
 
+#ifdef DEBUG
 	printf("(wikiId=%d) redirected to %s%s\n", wikiId, prefix, title);
+#endif
 
 	// Check target
 	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
-	assert(reply->type != REDIS_REPLY_NIL);
 
-	if(!isdigit(reply->str[0]))
+	if(reply->type == REDIS_REPLY_NIL || !isdigit(reply->str[0]))
 	{
 		freeReplyObject(reply);
 		// Target is still a redirect
@@ -283,7 +310,7 @@ void redirect(const vector<string> &data)
 		freeReplyObject(reply);
 
 #ifdef USE_LOCAL_STORAGE
-		wikistatus[wikiId] = 3; //resolved redirect
+		wikistatus[wikiId].type = 3; //resolved redirect
 		wikigraphId[wikiId] = graphId;
 
 		// This key is no longer needed
@@ -324,13 +351,15 @@ void main_stage2()
 
 /**************
  * STAGE 3
+ * Handle pagelinks in order to generate directed graph between articles
  */
-int edges, links;
+int edges, pagelink_rows;
 FILE *graphout;
+int duplicate_edges, skipped_catlinks, skipped_fromcat_links;
 
 void stat_handler3(double percent)
 {
-	printf("  %5.2lf%% edges=%d  links=%d\n", percent, edges, links);
+	printf("  %5.2lf%% edges=%d  rows=%d\n", percent, edges, pagelink_rows);
 }
 
 int cur_graphId;
@@ -338,37 +367,56 @@ vector<int> graphedges;
 
 void write_graphId(int from_graphId)
 {
+	// Assert that pagelinks are exported with: mysqldump --order-by-primary
 	assert(from_graphId >= cur_graphId);
 
 	if(from_graphId != cur_graphId)
 	{
 		if(cur_graphId && graphedges.size())
 		{
+			sort(graphedges.begin(), graphedges.end());
+
 			int len = graphedges.size();
+			// Write current node graphId
 			fwrite(&cur_graphId, 1, sizeof(int), graphout);
+			// Write length of edge list
 			fwrite(&len, 1, sizeof(int), graphout);
 			for(int i=0;i<len;i++)
 			{
+				// Check for duplicates
+				if(i && graphedges[i-1] == graphedges[i])
+				{
+					duplicate_edges++;
+					continue;
+				}
+				// Write in binary form
 				fwrite(&graphedges[i], 1, sizeof(int), graphout);
 			}
+			graphedges.clear();
 		}
 		cur_graphId = from_graphId;
 	}
 }
 
+/* SQL schema */
 #define pl_from 0 // int(8) unsigned NOT NULL DEFAULT '0',
 #define pl_namespace 1 // int(11) NOT NULL DEFAULT '0',
 #define pl_title 2 // varbinary(255) NOT NULL DEFAULT '',
 
 void pagelink(const vector<string> &data)
 {
-	links++;
+	pagelink_rows++;
 	int wikiId = atoi(data[pl_from].c_str());
 
 	// Check if this page exists and is regular (not redirect)
 #ifdef USE_LOCAL_STORAGE
-	if(wikistatus[wikiId] != 1) // If it is not regular page skip it
+	if(wikistatus[wikiId].type != 1) // If it is not regular page skip it
 		return;
+	if(wikistatus[wikiId].is_category)
+	{
+		skipped_fromcat_links++;
+		return; //skip links from categories
+	}
 	int from_graphId = wikigraphId[wikiId];
 #else
 	reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId );
@@ -384,6 +432,10 @@ void pagelink(const vector<string> &data)
 	}
 	int from_graphId = atoi(reply->str);
 	freeReplyObject(reply);
+#endif /* USE_LOCAL_STORAGE */
+
+#ifdef DEBUG
+	printf("** graphId=%d (wikiId=%d)\n", from_graphId, wikiId);
 #endif
 
 	write_graphId(from_graphId);
@@ -394,7 +446,12 @@ void pagelink(const vector<string> &data)
 	if(namespc == NS_MAIN) //Articles
 		prefix = "a:";
 	else if(namespc == NS_CATEGORY) //Categories
-		prefix = "c:";
+	{
+		// Links to categories are ignored
+		// I only focus on inter-article links and category inclusion links
+		skipped_catlinks++;
+		return;
+	}
 	else
 		return; //other namespaces are not interesting
 
@@ -402,7 +459,9 @@ void pagelink(const vector<string> &data)
 	int title_len = data[pl_title].size();
 	calc_md5(title, title_len);
 
+#ifdef DEBUG
 	printf("link from graphId=%d (wikiId=%d)  to=%s%s\n", from_graphId, wikiId, prefix, title );
+#endif
 
 	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
 	if(reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0]))
@@ -455,12 +514,18 @@ int main(int argc, char *argv[])
 	printf("Article redirects: %d\n", art_redirect_count);
 	printf("Categories: %d\n", category_count);
 	printf("Category redirects: %d\n", cat_redirect_count);
+	printf("Graph Nodes: %d\n", graphNodes);
 
 	printf("Staring stage 2\n");
 	main_stage2();
 
 	printf("Staring stage 3\n");
 	main_stage3();
+	printf("Table edgelink rows: %d\n", pagelink_rows);
+	printf("Edges: %d\n", edges);
+	printf("Ignored duplicate edges: %d\n", duplicate_edges);
+	printf("Ignored links from categories: %d\n", skipped_fromcat_links);
+	printf("Ignored links to categories: %d\n", skipped_catlinks);
 	return 0;
 }
 

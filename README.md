@@ -21,3 +21,7 @@ Main unit is called `page`, and each `page` can be classified into different nam
 Page links can be between any two pages. Meaning that article/category can link any to an article/category. There is another type of link, that is category link. Category link has completely different meaning from page links.
 
 
+Assumptions
+-----------
+* pagelinks.sql is exported with sorting `mysqldump --tables pagelinks --order-by-primary`
+
