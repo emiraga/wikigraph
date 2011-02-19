@@ -67,12 +67,12 @@ void calc_md5(const char *str, int len)
 	}
 }
 
-/*****
+/**************
  * Database
  *
  * I would normally use redis for this data, but I was primarily trying to
- * reduce memory usage of redis server by storing certain keys in array rather
- * than in database.
+ * reduce memory usage of redis server by storing certain keys in an array
+ * rather than the database.
  */
 #ifdef USE_LOCAL_STORAGE
 
@@ -83,7 +83,7 @@ int wikigraphId[MAX_WIKI_PAGEID+1];
 
 #endif /* USE_LOCAL_STORAGE */
 
-/*****
+/**************
  * STAGE 1
  */
 int graphNodes = 0;
@@ -127,7 +127,9 @@ void page(const vector<string> &data)
 		return; //other namespaces are not interesting
 
 	int wikiId = atoi(data[page_id].c_str());
+#ifdef USE_LOCAL_STORAGE
 	assert(wikiId <= MAX_WIKI_PAGEID);
+#endif
 
 	const char *title = data[page_title].c_str();
 	int title_len = data[page_title].size();
@@ -137,12 +139,18 @@ void page(const vector<string> &data)
 	if(is_redir)
 	{
 		reply = (redisReply*)redisCommand(c, REDISCMD_SETNX_WD, prefix, hash_1, hash_2, wikiId );
+#ifdef DEBUG
+		printf("redirect %s%s  key=%s%s %s (wikiId=%d)\n", prefix, title, prefix, hash_1, hash_2, wikiId);
+#endif
 	}
 	else
 	{
 		graphId = ++graphNodes; //generate from local storage; could have use INCR from redis
 
 		reply = (redisReply*)redisCommand(c, REDISCMD_SETNX_D , prefix, hash_1, hash_2, graphId );
+#ifdef DEBUG
+		printf("graph[%d] = %s%s  (wikiId=%d)\n", graphId, prefix, title, wikiId);
+#endif
 	}
 	if(reply->integer != 1)
 	{
@@ -162,10 +170,9 @@ void page(const vector<string> &data)
 	{
 #ifdef USE_LOCAL_STORAGE
 		wikistatus[wikiId] = 2; //redirect
-#else
-		reply = (redisReply*)redisCommand(c, "SET w:%d r", wikiId );
-		freeReplyObject(reply);
 #endif
+		reply = (redisReply*)redisCommand(c, "SET w:%d %s%s%s", wikiId, prefix, hash_1, hash_2);
+		freeReplyObject(reply);
 	}
 	else
 	{
@@ -196,7 +203,7 @@ void main_stage1()
 	delete parser;
 }
 
-/*****
+/**************
  * STAGE 2
  */
 
@@ -204,7 +211,7 @@ int cnt_still_redir;
 
 void stat_handler2(double percent)
 {
-	printf("  %5.2lf%%   unresolved=%d\n", percent, cnt_still_redir);
+	printf("  %5.2lf%%  unresolved=%d\n", percent, cnt_still_redir);
 }
 
 #define rd_from 0 // int(8) unsigned NOT NULL DEFAULT '0',
@@ -220,7 +227,8 @@ void redirect(const vector<string> &data)
 		return;
 #else
 	reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId );
-	if(reply->type == REDIS_REPLY_NIL || isdigit(reply->str[0]))
+	assert(reply->type != REDIS_REPLY_NIL);
+	if(isdigit(reply->str[0]))
 	{
 		// Redirect is already resolved
 		freeReplyObject(reply);
@@ -242,9 +250,12 @@ void redirect(const vector<string> &data)
 	int title_len = data[rd_title].size();
 	calc_md5(title, title_len);
 
+	printf("(wikiId=%d) redirected to %s%s\n", wikiId, prefix, title);
+
 	// Check target
 	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
 	assert(reply->type != REDIS_REPLY_NIL);
+
 	if(!isdigit(reply->str[0]))
 	{
 		freeReplyObject(reply);
@@ -256,21 +267,42 @@ void redirect(const vector<string> &data)
 		// Target is valid page (or resolved redirect)
 		int graphId = atoi(reply->str);
 		freeReplyObject(reply);
+		// Need to get prefix:hash of a page based on its wikiId
+		reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId);
+		assert(reply->type == REDIS_REPLY_STRING);
+		assert(reply->str[1] == ':');
+		if(reply->str[0] == 'a')
+			prefix = "a:";
+		else
+			prefix = "c:";
+		strncpy(hash_1, reply->str+2, keylen_1*2);
+		strncpy(hash_2, reply->str+2+keylen_1*2, keylen_2*2);
+		freeReplyObject(reply);
+
+		reply = (redisReply*)redisCommand(c, REDISCMD_SET_D, prefix, hash_1, hash_2, graphId);
+		freeReplyObject(reply);
+
 #ifdef USE_LOCAL_STORAGE
 		wikistatus[wikiId] = 3; //resolved redirect
 		wikigraphId[wikiId] = graphId;
+
+		// This key is no longer needed
+		reply = (redisReply*)redisCommand(c, "DEL w:%d", wikiId);
+		freeReplyObject(reply);
 #else
-		reply = (redisReply*)redisCommand(c, "SET w:%d %d", wikiId, graphId);
+		reply = (redisReply*)redisCommand(c, "SET w:%d %dr", wikiId, graphId);
+		// This extra 'r' at the end denotes that it is a resolved redirect
 		freeReplyObject(reply);
 #endif
-		reply = (redisReply*)redisCommand(c, REDISCMD_SET_D, prefix, hash_1, hash_2, graphId);
-		freeReplyObject(reply);
 	}
 }
 
 void main_stage2()
 {
+	// Can handle multiple redirects (up to 6 levels)
+	const int REDIR_MAX = 6;
 	int prev_count;
+	int i=0;
 	do
 	{
 		prev_count = cnt_still_redir;
@@ -283,12 +315,14 @@ void main_stage2()
 		parser->run();
 		parser->close();
 		delete parser;
+		printf("Unresolved redirects: %d\n", cnt_still_redir);
+		i++;
 	}
-	while(cnt_still_redir && cnt_still_redir != prev_count );
+	while(cnt_still_redir && cnt_still_redir != prev_count && i < REDIR_MAX);
 }
 
 
-/*****
+/**************
  * STAGE 3
  */
 int edges, links;
@@ -338,10 +372,13 @@ void pagelink(const vector<string> &data)
 	int from_graphId = wikigraphId[wikiId];
 #else
 	reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId );
-	//TODO: also check if this was not a redirect
-	if(reply->type == REDIS_REPLY_NIL || !isdigit(reply->str[0]))
+	int replyLen = strlen(reply->str);
+	assert(reply->type != REDIS_REPLY_NIL);//Exit if there is no such page
+
+	// Check is this is a regular page
+	if( !isdigit(reply->str[0]) //redirects start with non-digit
+	||  !isdigit(reply->str[replyLen-1]) ) //resolved redirects end with non-digit
 	{
-		// It's not there or not a page
 		freeReplyObject(reply);
 		return;
 	}
@@ -364,6 +401,8 @@ void pagelink(const vector<string> &data)
 	const char *title = data[pl_title].c_str();
 	int title_len = data[pl_title].size();
 	calc_md5(title, title_len);
+
+	printf("link from graphId=%d (wikiId=%d)  to=%s%s\n", from_graphId, wikiId, prefix, title );
 
 	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
 	if(reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0]))
@@ -398,8 +437,8 @@ void main_stage3()
 
 int main(int argc, char *argv[])
 {
-#ifdef REDISUNIX
-	c = redisConnectUnix(REDISUNIX);
+#ifdef REDIS_UNIXSOCKET
+	c = redisConnectUnix(REDIS_UNIXSOCKET);
 #else
 	struct timeval timeout = { 1, 500000 }; // 1.5 seconds
 	c = redisConnectWithTimeout((char*)REDISHOST, REDISPORT, timeout);
@@ -409,6 +448,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	printf("Staring stage 1\n");
 	main_stage1();
 
 	printf("Articles: %d\n", article_count);
@@ -416,8 +456,10 @@ int main(int argc, char *argv[])
 	printf("Categories: %d\n", category_count);
 	printf("Category redirects: %d\n", cat_redirect_count);
 
+	printf("Staring stage 2\n");
 	main_stage2();
 
+	printf("Staring stage 3\n");
 	main_stage3();
 	return 0;
 }

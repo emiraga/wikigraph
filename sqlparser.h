@@ -123,6 +123,13 @@ private:
 				data.push_back( get_quoted_string() );
 			else if(isdigit(c) || c == '-')
 				data.push_back( get_number() );
+			else if(c == 'N')
+			{
+				assert(get() == 'N');
+				assert(get() == 'U');
+				assert(get() == 'L');
+				assert(get() == 'L');
+			}
 			else
 			{
 				printf("Unexpected: '%c'\n", c);
