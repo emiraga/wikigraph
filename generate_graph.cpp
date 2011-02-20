@@ -47,7 +47,7 @@ char hash_2[keylen_2*2 + 1];
 char hexchars[16] = {'0', '1', '2', '3', '4', '5', '6',
 	'7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
-void calc_md5(const char *str, int len)
+void calc_hash(const char *str, int len)
 {
 	md5_state_t state;
 	md5_byte_t digest[16];
@@ -68,6 +68,55 @@ void calc_md5(const char *str, int len)
 	}
 }
 
+class BufferedWriter
+{
+	static const int BWSIZE = 1024*1024;
+	unsigned int buffer[BWSIZE];
+	FILE *f;
+	size_t pos;
+public:
+	BufferedWriter(const char *name)
+		:pos(0), f(fopen(name, "wb"))
+	{
+		if(!f)
+		{
+			perror("fopen");
+			exit(1);
+		}
+	}
+	~BufferedWriter()
+	{
+		close();
+	}
+	void flush()
+	{
+		size_t res = fwrite(buffer, 4, pos, f);
+		if(res != pos)
+		{
+			perror("fopen");
+			exit(1);
+		}
+		pos = 0;
+	}
+	void close()
+	{
+		if(f)
+		{
+			flush();
+			fclose(f);
+			f = NULL;
+		}
+	}
+	void writeUint(unsigned int val)
+	{
+		buffer[pos++] = val;
+		if(pos == BWSIZE)
+		{
+			flush();
+		}
+	}
+};
+
 /**************
  * Database
  *
@@ -83,8 +132,8 @@ void calc_md5(const char *str, int len)
 #pragma pack(1)     /* set alignment to 1 byte boundary */
 struct wikistatus_t
 {
-	int type:2; // 0 - unknown, 1 - regular, 2 - redirect, 3 - resolved redirect
-	int is_category:1; // 0 - article, 1 - category
+	unsigned int type:3; // 0 - unknown, 1 - regular, 2 - redirect, 3 - resolved redirect
+	unsigned int is_category:1; // 0 - article, 1 - category
 };
 #pragma pack(pop)
 
@@ -157,7 +206,7 @@ void page(const vector<string> &data)
 
 	const char *title = data[page_title].c_str();
 	int title_len = data[page_title].size();
-	calc_md5(title, title_len);
+	calc_hash(title, title_len);
 
 	int graphId;
 	if(is_redir)
@@ -211,9 +260,10 @@ void page(const vector<string> &data)
 	return;
 }
 
-void stat_handler(double percent)
+bool stat_handler(double percent)
 {
 	printf("  %5.2lf%%\n", percent);
+	return (percent < STOP_AFTER_PRECENT);
 }
 
 void main_stage1()
@@ -234,9 +284,10 @@ void main_stage1()
 
 int cnt_still_redir;
 
-void stat_handler2(double percent)
+bool stat_handler2(double percent)
 {
 	printf("  %5.2lf%%  unresolved=%d\n", percent, cnt_still_redir);
+	return (percent < STOP_AFTER_PRECENT);
 }
 
 /* SQL schema */
@@ -274,7 +325,7 @@ void redirect(const vector<string> &data)
 
 	const char *title = data[rd_title].c_str();
 	int title_len = data[rd_title].size();
-	calc_md5(title, title_len);
+	calc_hash(title, title_len);
 
 #ifdef DEBUG
 	printf("(wikiId=%d) redirected to %s%s\n", wikiId, prefix, title);
@@ -353,17 +404,21 @@ void main_stage2()
  * STAGE 3
  * Handle pagelinks in order to generate directed graph between articles
  */
-int edges, pagelink_rows;
+unsigned int num_edges, pagelink_rows;
 FILE *graphout;
-int duplicate_edges, skipped_catlinks, skipped_fromcat_links;
+int skipped_catlinks, skipped_fromcat_links;
 
-void stat_handler3(double percent)
+bool stat_handler3(double percent)
 {
-	printf("  %5.2lf%% edges=%d  rows=%d\n", percent, edges, pagelink_rows);
+	printf("  %5.2lf%% edges=%u  rows=%u\n", percent, num_edges, pagelink_rows);
+	return (percent < STOP_AFTER_PRECENT);
 }
 
 int cur_graphId;
 vector<int> graphedges;
+
+BufferedWriter *node_begin_list;
+BufferedWriter *edge_list;
 
 void write_graphId(int from_graphId)
 {
@@ -372,28 +427,25 @@ void write_graphId(int from_graphId)
 
 	if(from_graphId != cur_graphId)
 	{
-		if(cur_graphId && graphedges.size())
+		for(int i=cur_graphId; i< from_graphId; i++)
 		{
-			sort(graphedges.begin(), graphedges.end());
-
-			int len = graphedges.size();
-			// Write current node graphId
-			fwrite(&cur_graphId, 1, sizeof(int), graphout);
-			// Write length of edge list
-			fwrite(&len, 1, sizeof(int), graphout);
-			for(int i=0;i<len;i++)
-			{
-				// Check for duplicates
-				if(i && graphedges[i-1] == graphedges[i])
-				{
-					duplicate_edges++;
-					continue;
-				}
-				// Write in binary form
-				fwrite(&graphedges[i], 1, sizeof(int), graphout);
-			}
-			graphedges.clear();
+			// For each node write the beginning of its edge list
+			node_begin_list->writeUint(num_edges);
+#ifdef DEBUG
+			printf("W1:%u\n", num_edges);
+#endif
 		}
+
+		for(size_t i=0;i<graphedges.size();i++)
+		{
+			edge_list->writeUint(graphedges[i]);
+#ifdef DEBUG
+			printf("W2:%u\n", graphedges[i]);
+#endif
+		}
+		num_edges += graphedges.size();
+		graphedges.clear();
+
 		cur_graphId = from_graphId;
 	}
 }
@@ -421,9 +473,9 @@ void pagelink(const vector<string> &data)
 #else
 	reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId );
 	int replyLen = strlen(reply->str);
-	assert(reply->type != REDIS_REPLY_NIL);//Exit if there is no such page
+	assert(reply->type != REDIS_REPLY_NIL);//if there is no such page
 
-	// Check is this is a regular page
+	// Check if this is a regular page
 	if( !isdigit(reply->str[0]) //redirects start with non-digit
 	||  !isdigit(reply->str[replyLen-1]) ) //resolved redirects end with non-digit
 	{
@@ -433,10 +485,6 @@ void pagelink(const vector<string> &data)
 	int from_graphId = atoi(reply->str);
 	freeReplyObject(reply);
 #endif /* USE_LOCAL_STORAGE */
-
-#ifdef DEBUG
-	printf("** graphId=%d (wikiId=%d)\n", from_graphId, wikiId);
-#endif
 
 	write_graphId(from_graphId);
 
@@ -457,17 +505,18 @@ void pagelink(const vector<string> &data)
 
 	const char *title = data[pl_title].c_str();
 	int title_len = data[pl_title].size();
-	calc_md5(title, title_len);
-
-#ifdef DEBUG
-	printf("link from graphId=%d (wikiId=%d)  to=%s%s\n", from_graphId, wikiId, prefix, title );
-#endif
+	calc_hash(title, title_len);
 
 	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
 	if(reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0]))
 	{
 		int to_graphId = atoi(reply->str);
-		edges++;
+
+#ifdef DEBUG
+	printf("link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d\n", from_graphId, wikiId, prefix, title, to_graphId);
+#endif
+		printf("%d\n", wikistatus[to_graphId].type);
+
 		graphedges.push_back(to_graphId);
 	}
 	freeReplyObject(reply);
@@ -479,12 +528,19 @@ void main_stage3()
 	parser->set_data_handler(pagelink);
 	parser->set_stat_handler(stat_handler3);
 
-	graphout = fopen("graph.bin", "wb");
-	parser->run();
-	// This is an ugly trick to force that last node to be written
-	write_graphId(INT_MAX);
+	node_begin_list = new BufferedWriter("graph_nodes.bin");
+	edge_list = new BufferedWriter("graph_edges.bin");
 
-	fclose(graphout);
+	parser->run();
+	// Trick to force that last node to be written
+	write_graphId(cur_graphId + 1);
+	write_graphId(cur_graphId + 1);
+
+	node_begin_list->close();
+	delete node_begin_list;
+
+	edge_list->close();
+	delete edge_list;
 
 	parser->close();
 	delete parser;
@@ -507,7 +563,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	printf("Staring stage 1\n");
+	printf("Starting stage 1\n");
 	main_stage1();
 
 	printf("Articles: %d\n", article_count);
@@ -516,14 +572,13 @@ int main(int argc, char *argv[])
 	printf("Category redirects: %d\n", cat_redirect_count);
 	printf("Graph Nodes: %d\n", graphNodes);
 
-	printf("Staring stage 2\n");
+	printf("Starting stage 2\n");
 	main_stage2();
 
-	printf("Staring stage 3\n");
+	printf("Starting stage 3\n");
 	main_stage3();
 	printf("Table edgelink rows: %d\n", pagelink_rows);
-	printf("Edges: %d\n", edges);
-	printf("Ignored duplicate edges: %d\n", duplicate_edges);
+	printf("Edges: %d\n", num_edges);
 	printf("Ignored links from categories: %d\n", skipped_fromcat_links);
 	printf("Ignored links to categories: %d\n", skipped_catlinks);
 	return 0;

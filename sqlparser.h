@@ -26,8 +26,9 @@ protected:
 	char buffer[BSIZE];
 	int buffer_size;
 	off_t fsize;
+	bool stop;
 
-	void (*stat_handler)(double);
+	bool (*stat_handler)(double);
 	void (*data_handler)(const vector<string>&);
 
 public:
@@ -48,10 +49,10 @@ public:
 	{
 		fclose(f);
 	}
-	static void null_stat_h(double percent)
+	static bool null_stat_h(double percent)
 	{
 	}
-	void set_stat_handler(void (*handler)(double))
+	void set_stat_handler(bool (*handler)(double))
 	{
 		stat_handler = handler;
 	}
@@ -64,7 +65,8 @@ public:
 	}
 	void run()
 	{
-		while(1)
+		stop = 0;
+		while(! stop)
 		{
 			char c = get();
 			if(eof()) break;
@@ -99,7 +101,8 @@ private:
 	void insert_command()
 	{
 		while(peek() != '(') get();
-		while(1)
+
+		while(!stop)
 		{
 			data_brackets();
 			char c = get();
@@ -264,8 +267,11 @@ private:
 	}
 	virtual void read_buffer()
 	{
+		bool cont = stat_handler( 100.0 * ftello(f) / fsize );
+		if(!cont)
+			stop = 1;
+
 		buffer_size = fread(buffer, 1, BSIZE, f);
-		stat_handler( 100.0 * ftello(f) / fsize );
 	}
 };
 
@@ -279,8 +285,11 @@ public:
 	}
 	virtual void read_buffer()
 	{
+		bool cont = SqlParser::stat_handler( 100.0 * lseek(fileno(SqlParser::f), 0, SEEK_CUR) / SqlParser::fsize );
+		if(!cont)
+			SqlParser::stop = 1;
+
 		SqlParser::buffer_size = gzread(fd, SqlParser::buffer, BSIZE);
-		SqlParser::stat_handler( 100.0 * lseek(fileno(SqlParser::f), 0, SEEK_CUR) / SqlParser::fsize );
 	}
 };
 

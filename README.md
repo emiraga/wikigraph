@@ -25,3 +25,9 @@ Assumptions
 -----------
 * pagelinks.sql is exported with sorting `mysqldump --tables pagelinks --order-by-primary`
 
+
+Performance
+-----------
+
+* Replace MD5 with some faster function
+

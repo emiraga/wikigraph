@@ -1,6 +1,3 @@
-/* Programs become extremely verbose and use localdumps instead of real ones */
-#define DEBUG
-
 #define DUMPFILES "mysqldumps/enwiki-20110115-" //only prefix
 
 /* Use 150MB in client program instead of in redis to speed-up computation and
@@ -19,7 +16,10 @@
 
 /* Using redis hashes is supposed to reduce memory usage
  * like they say in this page http://redis.io/topics/memory-optimization 
- * I did not achieve any significand savings, probably because of wrong usage.
+ * I did not achieve any significand savings, probably because of wrong config.
  */
 //#define USE_REDIS_HASH
+
+// Used in debugging, normally 101
+#define STOP_AFTER_PRECENT 1
 
