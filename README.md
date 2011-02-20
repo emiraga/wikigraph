@@ -12,7 +12,7 @@ Main unit is called `page`, and each `page` can be classified into different nam
 
 Page links can be between any two pages. Meaning that article/category can link any to an article/category. There is another type of link, that is category link. Category link has completely different meaning from page links.
 
-<img src="http://i.imgur.com/DnOxI.png" alt="" title="Hosted by imgur.com" />
+<img src="http://i.imgur.com/dJlSF.png" alt="" title="Hosted by imgur.com" />
 
 Links shaded in gray are ignored to keep things simple and since they are rarely used on wikipedia.
 
