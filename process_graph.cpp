@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include <getopt.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -338,7 +339,7 @@ int main(int argc, char *argv[])
 	while(1)
 	{
 		// Wait for a job on the queue
-		redisReply *reply = (redisReply*)redisCommand(c,"BRPOPLPUSH q:jobs q:running 0");
+		redisReply *reply = (redisReply*)redisCommand(c,"BRPOPLPUSH queue:jobs queue:running 0");
 
 		char job[101];
 		strncpy(job, reply->str, 100 );
@@ -352,6 +353,7 @@ int main(int argc, char *argv[])
 
 		time_t t_start = clock();
 		string result;
+		bool no_result = false;
 		switch(job[0])
 		{
 			case 'D':{ //count distances from node
@@ -365,6 +367,9 @@ int main(int argc, char *argv[])
 					vector<int> cntdist = get_distances(node);
 					result = "{count_dist:" + to_json(cntdist) + "}";
 				}
+#ifdef DEBUG
+					usleep(1000 * 100);
+#endif
 			}
 			break;
 			case 'S':{ // Sizes of strongly connected components
@@ -376,9 +381,16 @@ int main(int argc, char *argv[])
 				result = "{still_alive:'This was a triumph.'}";
 			}
 			break;
+			case '.':{ // Job that does not produce any result
+				no_result = true;
+				// Used to test a crashing client
+			}
+			break;
 			default:
 				result = "{error:'Unknown command'}";
 		}
+		if(no_result)
+			continue;
 
 		/* Set results */
 		reply = (redisReply*)redisCommand(c,"SETEX result:%s %d %b", job, RESULTS_EXPIRE, result.c_str(), result.size());

@@ -408,12 +408,6 @@ unsigned int num_edges, pagelink_rows;
 FILE *graphout;
 int skipped_catlinks, skipped_fromcat_links;
 
-bool stat_handler3(double percent)
-{
-	printf("  %5.2lf%% edges=%u  rows=%u\n", percent, num_edges, pagelink_rows);
-	return (percent < STOP_AFTER_PRECENT);
-}
-
 int cur_graphId;
 vector<int> graphedges;
 
@@ -431,17 +425,11 @@ void write_graphId(int from_graphId)
 		{
 			// For each node write the beginning of its edge list
 			node_begin_list->writeUint(num_edges);
-#ifdef DEBUG
-			printf("W1:%u\n", num_edges);
-#endif
 		}
 
 		for(size_t i=0;i<graphedges.size();i++)
 		{
 			edge_list->writeUint(graphedges[i]);
-#ifdef DEBUG
-			printf("W2:%u\n", graphedges[i]);
-#endif
 		}
 		num_edges += graphedges.size();
 		graphedges.clear();
@@ -513,10 +501,9 @@ void pagelink(const vector<string> &data)
 		int to_graphId = atoi(reply->str);
 
 #ifdef DEBUG
-	printf("link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d\n", from_graphId, wikiId, prefix, title, to_graphId);
+	printf("link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
+			from_graphId, wikiId, prefix, title, to_graphId, wikistatus[to_graphId].type);
 #endif
-		printf("%d\n", wikistatus[to_graphId].type);
-
 		graphedges.push_back(to_graphId);
 	}
 	freeReplyObject(reply);
@@ -526,7 +513,7 @@ void main_stage3()
 {
 	SqlParser *parser = SqlParser::open(DUMPFILES"pagelinks.sql");
 	parser->set_data_handler(pagelink);
-	parser->set_stat_handler(stat_handler3);
+	parser->set_stat_handler(stat_handler);
 
 	node_begin_list = new BufferedWriter("graph_nodes.bin");
 	edge_list = new BufferedWriter("graph_edges.bin");
@@ -566,21 +553,20 @@ int main(int argc, char *argv[])
 	printf("Starting stage 1\n");
 	main_stage1();
 
-	printf("Articles: %d\n", article_count);
-	printf("Article redirects: %d\n", art_redirect_count);
-	printf("Categories: %d\n", category_count);
-	printf("Category redirects: %d\n", cat_redirect_count);
-	printf("Graph Nodes: %d\n", graphNodes);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Articles %d", article_count); freeReplyObject(reply);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Article_redirects %d", art_redirect_count); freeReplyObject(reply);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Categories %d", category_count); freeReplyObject(reply);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Category_redirects %d", cat_redirect_count ); freeReplyObject(reply);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Graph_nodes %d", graphNodes ); freeReplyObject(reply);
 
 	printf("Starting stage 2\n");
 	main_stage2();
 
 	printf("Starting stage 3\n");
 	main_stage3();
-	printf("Table edgelink rows: %d\n", pagelink_rows);
-	printf("Edges: %d\n", num_edges);
-	printf("Ignored links from categories: %d\n", skipped_fromcat_links);
-	printf("Ignored links to categories: %d\n", skipped_catlinks);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Edges %d", num_edges ); freeReplyObject(reply);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Ignored_links_from_category %d", skipped_fromcat_links ); freeReplyObject(reply);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Ignored_links_to_category %d", skipped_catlinks ); freeReplyObject(reply);
 	return 0;
 }
 
