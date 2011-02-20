@@ -4,9 +4,9 @@
  * reduce memory usage of redis-server */
 #define USE_LOCAL_STORAGE
 
-#define REDIS_UNIXSOCKET "/tmp/redis.sock"
-//#define REDISHOST "127.0.0.1"
-//#define REDISPORT 6379
+#define REDIS_UNIXSOCKET "/tmp/redis.sock" //if possible
+#define REDISHOST "127.0.0.1"
+#define REDISPORT 6379
 
 #ifdef DEBUG
 // Switch to localdump-*.sql files in debug mode

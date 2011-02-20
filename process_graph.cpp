@@ -8,6 +8,8 @@
 #include <string>
 #include <algorithm>
 
+#include <getopt.h>
+
 using namespace std;
 
 #include "hiredis/hiredis.h"
@@ -120,72 +122,6 @@ vector<int> get_distances(int start)
 	}
 	return result;
 }
-
-/*
-
-Recursive version of tarjan's SCC, not used since it will overflow the stack on wiki-sized graph
-
-int tindex;
-
-int nodeindex[MAXNODES];
-int stack[MAXNODES];
-
-int lowindex[MAXNODES];
-bool instack[MAXNODES];
-vector<int> scc_result;
-int top;
-
-void scc_tarjan(int node)
-{
-	lowindex[node] = nodeindex[node] = tindex++;
-	stack[top++] = node;
-	instack[node] = true;
-	for(int i=list[node][0]; i<list[node][1]; i++)
-	{
-		int dest = edges[i];
-		if(nodeindex[dest] == -1)
-		{
-			scc_tarjan(dest);
-			lowindex[node] = min(lowindex[node], lowindex[dest]);
-		}
-		else if(instack[dest])
-		{
-			lowindex[node] = min(lowindex[node], lowindex[dest]);
-		}
-	}
-	if(lowindex[node] == nodeindex[node])
-	{
-		int count = 0;
-		int sccnode;
-		do
-		{
-			sccnode = stack[--top];
-			instack[sccnode] = false;
-			count++;
-		}
-		while(sccnode != node);
-		scc_result.push_back(count);
-	}
-}
-
-void scc()
-{
-	memset(nodeindex, -1, sizeof(nodeindex));
-	memset(instack, 0, sizeof(instack));
-	tindex = 1;
-	top = 0;
-	scc_result.clear();
-
-	for(int i=0;i<MAXNODES;i++)
-	{
-		if(nodeindex[i] == -1 && list[i][0])
-		{
-			scc_tarjan(i);
-		}
-	}
-}
-
-*/
 
 int* get_int_array(int size, int init)
 {
@@ -320,17 +256,80 @@ string to_json(const vector<int> &v)
 	return msg;
 }
 
-int main(void)
+void print_help(char *prg)
 {
+	printf("Usage: %s [options]\n", prg);
+	printf("\n");
+	printf("-f N\tStart N background workers\n");
+	printf("-r HOST\tName of the host of redis server, default:%s\n", REDISHOST);
+	printf("-p PORT\tPort of redis server, default:%d\n", REDISPORT);
+	printf("-h\tShow this help\n");
+	printf("\n");
+	printf("Visit https://github.com/emiraga/wikigraph for more info.\n");
+}
+
+int main(int argc, char *argv[])
+{
+	int fork_off = 0;
+
+	char redis_host[51] = REDISHOST;
+	int redis_port = REDISPORT;
+
+	while(1)
+	{
+		int option = getopt(argc, argv, "f:r:p:h");
+		if( option == -1 )
+			break;
+		switch(option)
+		{
+			case 'f':
+				fork_off = atoi(optarg);
+			break;
+			case 'r':
+				strncpy(redis_host, optarg, 50);
+			break;
+			case 'p':
+				redis_port = atoi(optarg);
+			break;
+			case 'h':
+				print_help(argv[0]);
+				return 0;
+			break;
+			default:
+				print_help(argv[0]);
+				return 1;
+		}
+	}
+	if(argc != optind)
+	{
+		print_help(argv[0]);
+		return 1;
+	}
+
+	// Should be called before fork()'s to save memory (copy-on-write)
 	load_graph();
 
+	bool is_parent = true;
+	if(fork_off)
+	{
+		for(int i=0; i<fork_off; i++)
+		{
+			if(!fork())
+			{
+				is_parent = false;
+				break;
+			}
+		}
+		if(is_parent)
+		{
+			printf("Started %d worker(s).\n", fork_off);
+			return 0;
+		}
+	}
+
 	redisContext *c;
-#ifdef REDIS_UNIXSOCKET
-	c = redisConnectUnix(REDIS_UNIXSOCKET);
-#else
 	struct timeval timeout = { 1, 500000 }; // 1.5 seconds
-	c = redisConnectWithTimeout((char*)REDISHOST, REDISPORT, timeout);
-#endif
+	c = redisConnectWithTimeout(redis_host, redis_port, timeout);
 	if (c->err) {
 		printf("Connection error: %s\n", c->errstr);
 		exit(1);
@@ -341,17 +340,21 @@ int main(void)
 		// Wait for a job on the queue
 		redisReply *reply = (redisReply*)redisCommand(c,"BRPOPLPUSH q:jobs q:running 0");
 
-		printf("Request: %s\n", reply->str);
 		char job[101];
 		strncpy(job, reply->str, 100 );
 		job[100] = 0;
 		freeReplyObject(reply);
 
+		if(is_parent)
+		{
+			printf("Request: %s\n", job);
+		}
+
 		time_t t_start = clock();
 		string result;
 		switch(job[0])
 		{
-			case 'A':{ //count distances from node
+			case 'D':{ //count distances from node
 				int node = atoi(job+1);
 				if(node < 1 || node > num_nodes)
 				{
@@ -369,27 +372,27 @@ int main(void)
 				result = "{component_sizes:" + to_json(components) + "}";
 			}
 			break;
-			case 'P':{ // 'Are you still there?' (in GLaDOS voice)
+			case 'P':{ // PING 'Are you still there?' (in GLaDOS voice)
 				result = "{still_alive:'This was a triumph.'}";
 			}
 			break;
 			default:
-				fprintf(stderr, "Unknown command '%c'\n", reply->str[0]);
 				result = "{error:'Unknown command'}";
 		}
 
 		/* Set results */
 		reply = (redisReply*)redisCommand(c,"SETEX result:%s %d %b", job, RESULTS_EXPIRE, result.c_str(), result.size());
-		printf("SET (binary API): %s\n", reply->str);
 		freeReplyObject(reply);
 
 		/* Announce the results to channel */
 		reply = (redisReply*)redisCommand(c,"PUBLISH announce:%s %b", job, result.c_str(), result.size());
-		printf("SET (binary API): %lld\n", reply->integer);
 		freeReplyObject(reply);
 
 		time_t t_end = clock();
-		printf("Time to complete %.5lf: %s\n", double(t_end - t_start)/CLOCKS_PER_SEC, result.c_str());
+		if(is_parent)
+		{
+			printf("Time to complete %.5lf: %s\n", double(t_end - t_start)/CLOCKS_PER_SEC, result.c_str());
+		}
 	}
 
 	delete[] edges;
