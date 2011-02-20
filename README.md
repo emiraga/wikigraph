@@ -8,15 +8,15 @@ I started with a [XML parser](https://github.com/emiraga/wikigraph/blob/f4ee89d2
 Mediawiki database schema
 -------------------------
 
-Main unit is called `page`, and each `page` can be classified into different namespaces. Two types of namespaces are important here: *article* and *category*. Hence each `page` can be of these two types.
+Main unit is called `page`, and each page can be classified into different namespaces. Two types of namespaces are important here: *article* and *category*.
 
-Page links can be between any two pages. Meaning that article/category can link any to an article/category. Category link has different meaning from page links.
+Page links can be between any two pages. Meaning that article/category can link any to an article/category. Category links have different meaning from page links.
 
 <img src="http://i.imgur.com/dJlSF.png" alt="" title="Hosted by imgur.com" />
 
 Gray links in above figure are ignored to keep things simple and since they are rarely used on wikipedia. Let me know if you have justification for doing otherwise.
 
-Page links are uni-directional whereas category links are in both directions. An article/category *belongs* to a category and a category *has* articles/categories in it.
+Page links are uni-directional, whereas category links are in both directions. An article/category *belongs* to a category and a category *has* articles/categories in it.
 
 Try it yourself
 ---------------
@@ -33,16 +33,16 @@ Run a redis server on a localhost and default port.
 	coffee analyze.coffee
 	<REDISPATH>redis-cli "keys s:*"
 
-To do an analysis of a real wikipedia database, download dumps from [wikipedia dumps page](http://dumps.wikimedia.org/enwiki/).  Optionally, you can extract those `*sql..gz` files.
+To do analysis of real wikipedia database, download dumps from [english wikipedia dumps page](http://dumps.wikimedia.org/enwiki/).  Optionally, you can extract those `*.sql.gz` files.
 
 Edit `config.h` and compile binaries
     make
-Start redis server, preferably with unix socket `/tmp/redis.sock`.
+Start redis server, preferably with unix socket `/tmp/redis.sock`. Generating graph is database-intensive operation, and unix socket will speed things up a bit.
 
 On a single machine first generate `graph*.bin`
     bin/generate_graph
 
-Analysis can be distributed, each node will need to have a copy of `graph*.bin`. You should start number of workers related to number of cores/processors that node has, for example dual core would look like this
+Analysis can be distributed, each node will need to have a copy of `graph*.bin`. You should start number of workers related to the number of cores/processors that node has, for example command for dual core would look like this
     bin/process_graph -r REDISHOST -p PORT -f 2
 
 And finally controller for the whole process

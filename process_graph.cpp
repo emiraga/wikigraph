@@ -7,6 +7,7 @@
 #include <time.h>
 #include <string>
 #include <algorithm>
+#include <climits>
 
 #include <getopt.h>
 #include <unistd.h>
@@ -18,6 +19,7 @@ using namespace std;
 
 #define RESULTS_EXPIRE 60 // Seconds
 #define MAXNODES 4250000 // maximum number of graph nodes
+typedef pair<int,int> pii;
 
 int node_begin_list[MAXNODES];
 #define node_end_list(x) (node_begin_list[(x)+1])
@@ -124,6 +126,66 @@ vector<int> get_distances(int start)
 	return result;
 }
 
+vector<pii> count_items(vector<int> &v)
+{
+	sort(v.begin(), v.end());
+	v.push_back(INT_MAX);
+	vector<pii> result;
+
+	int cnt = 0;
+	for(size_t i=0; i<v.size(); i++)
+	{
+		if(i && v[i-1] != v[i])
+		{
+			result.push_back(pii(v[i-1], cnt));
+			cnt = 1;
+		}
+		else
+		{
+			cnt++;
+		}
+	}
+	return result;
+}
+
+void test_count_items()
+{
+	vector<int> t;
+	vector<pii> r;
+	r = count_items(t);
+	assert(r.size() == 0);
+
+	t.push_back(3);
+	r = count_items(t);
+	assert(r.size() == 1 && r[0].first == 3 && r[0].second == 1);
+
+	t.push_back(3);
+	r = count_items(t);
+	assert(r.size() == 1 && r[0].first == 3 && r[0].second == 2);
+
+	t.push_back(3);
+	r = count_items(t);
+	assert(r.size() == 1 && r[0].first == 3 && r[0].second == 3);
+
+	t.push_back(4);
+	r = count_items(t);
+	assert(r.size() == 2 
+			&& r[0].first == 3 && r[0].second == 3
+			&& r[1].first == 4 && r[1].second == 1 );
+
+	t.push_back(4);
+	r = count_items(t);
+	assert(r.size() == 2 
+			&& r[0].first == 3 && r[0].second == 3
+			&& r[1].first == 4 && r[1].second == 2 );
+
+	t.push_back(3);
+	r = count_items(t);
+	assert(r.size() == 2 
+			&& r[0].first == 3 && r[0].second == 4
+			&& r[1].first == 4 && r[1].second == 2 );
+}
+
 int* get_int_array(int size, int init)
 {
 	int* res = (int*)malloc(sizeof(int)*size);
@@ -136,7 +198,7 @@ int* get_int_array(int size, int init)
 	return res;
 }
 
-vector<int> scc_tarjan()
+vector<pii> scc_tarjan()
 {
 	int tindex = 1;
 	int top = -1;
@@ -238,9 +300,10 @@ vector<int> scc_tarjan()
 	free(nodeindex);
 	free(instack);
 	free(stackI);
-    free(stacknode);
+	free(stacknode);
 	//free(stack);
-	return scc_result;
+
+	return count_items(scc_result);
 }
 
 string to_json(const vector<int> &v)
@@ -251,6 +314,20 @@ string to_json(const vector<int> &v)
 		if(i) msg += ",";
 		char msgpart[20];
 		sprintf(msgpart, "%d", v[i]);
+		msg += string(msgpart);
+	}
+	msg += "]";
+	return msg;
+}
+
+string to_json(const vector<pii> &v)
+{
+	string msg = "[";
+	for(int i=0; i<v.size(); i++)
+	{
+		if(i) msg += ",";
+		char msgpart[31];
+		snprintf(msgpart, 30, "[%d,%d]", v[i].first, v[i].second);
 		msg += string(msgpart);
 	}
 	msg += "]";
@@ -271,6 +348,8 @@ void print_help(char *prg)
 
 int main(int argc, char *argv[])
 {
+	test_count_items();
+
 	int fork_off = 0;
 
 	char redis_host[51] = REDISHOST;
@@ -360,34 +439,37 @@ int main(int argc, char *argv[])
 				int node = atoi(job+1);
 				if(node < 1 || node > num_nodes)
 				{
-					result = "{error:'Node out of range'}";
+					result = "{\"error\":\"Node out of range\"}";
 				}
 				else
 				{
 					vector<int> cntdist = get_distances(node);
-					result = "{count_dist:" + to_json(cntdist) + "}";
+					result = "{\"count_dist\":" + to_json(cntdist) + "}";
 				}
 #ifdef DEBUG
-					usleep(1000 * 100);
+				// Simulate slow processing
+				usleep(1000 * 100);
 #endif
 			}
 			break;
 			case 'S':{ // Sizes of strongly connected components
-				vector<int> components = scc_tarjan();
-				result = "{component_sizes:" + to_json(components) + "}";
+				vector<pii> components = scc_tarjan();
+				result = "{\"component_sizes\":" + to_json(components) + "}";
 			}
 			break;
 			case 'P':{ // PING 'Are you still there?' (in GLaDOS voice)
-				result = "{still_alive:'This was a triumph.'}";
+				result = "{\"still_alive\":\"This was a triumph.\"}";
 			}
 			break;
+#ifdef DEBUG
 			case '.':{ // Job that does not produce any result
 				no_result = true;
 				// Used to test a crashing client
 			}
 			break;
+#endif
 			default:
-				result = "{error:'Unknown command'}";
+				result = "{\"error\":\"Unknown command\"}";
 		}
 		if(no_result)
 			continue;
@@ -400,9 +482,9 @@ int main(int argc, char *argv[])
 		reply = (redisReply*)redisCommand(c,"PUBLISH announce:%s %b", job, result.c_str(), result.size());
 		freeReplyObject(reply);
 
-		time_t t_end = clock();
 		if(is_parent)
 		{
+			time_t t_end = clock();
 			printf("Time to complete %.5lf: %s\n", double(t_end - t_start)/CLOCKS_PER_SEC, result.c_str());
 		}
 	}
