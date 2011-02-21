@@ -15,21 +15,10 @@ using namespace std;
 #include "hiredis/hiredis.h"
 #include "md5.h"
 
-#ifdef USE_REDIS_HASH
-
-#define REDISCMD_SETNX_WD "HSETNX %s%s %s w:%d"
-#define REDISCMD_SETNX_D "HSETNX %s%s %s %d"
-#define REDISCMD_SET_D "HSET %s%s %s %d"
-#define REDISCMD_GET "HGET %s%s %s"
-
-#else
-
 #define REDISCMD_SETNX_WD "SETNX %s%s%s w:%d"
 #define REDISCMD_SETNX_D "SETNX %s%s%s %d"
 #define REDISCMD_SET_D "SET %s%s%s %d"
 #define REDISCMD_GET "GET %s%s%s"
-
-#endif /* USE_REDIS_HASH */
 
 // MediaWiki namespaces for articles and categories
 #define NS_MAIN 0
@@ -38,11 +27,9 @@ using namespace std;
 redisContext *c;
 redisReply *reply;
 
-const int keylen_1 = 3; //hexlen1 = keylen_1 * 2
-const int keylen_2 = 3; //hexlen2 = keylen_2 * 2
+const int keylen = 6; //hexlen = keylen * 2
 
-char hash_1[keylen_1*2 + 1];
-char hash_2[keylen_2*2 + 1];
+char hash_key[keylen*2 + 1];
 
 char hexchars[16] = {'0', '1', '2', '3', '4', '5', '6',
 	'7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
@@ -56,88 +43,12 @@ void calc_hash(const char *str, int len)
 	md5_append(&state, (const md5_byte_t *)str, len);
 	md5_finish(&state, digest);
 
-	for (int di = 0; di < keylen_1; ++di)
+	for (int di = 0; di < keylen; ++di)
 	{
-		hash_1[di * 2] = hexchars[digest[di]>>4];
-		hash_1[di*2+1] = hexchars[digest[di]&15];
-	}
-	for (int di = 0; di < keylen_2; ++di)
-	{
-		hash_2[di * 2] = hexchars[digest[keylen_1 + di]>>4];
-		hash_2[di*2+1] = hexchars[digest[keylen_1 + di]&15];
+		hash_key[di * 2] = hexchars[digest[di]>>4];
+		hash_key[di*2+1] = hexchars[digest[di]&15];
 	}
 }
-
-class BufferedWriter
-{
-	static const int BWSIZE = 1024*1024;
-	unsigned int buffer[BWSIZE];
-	FILE *f;
-	size_t pos;
-	int bitpos;
-
-public:
-	BufferedWriter(const char *name)
-		:pos(0), f(fopen(name, "wb")), bitpos(0)
-	{
-		if(!f)
-		{
-			perror("fopen");
-			exit(1);
-		}
-	}
-	~BufferedWriter()
-	{
-		close();
-	}
-	void flush()
-	{
-		size_t res = fwrite(buffer, 4, pos, f);
-		if(res != pos)
-		{
-			perror("fopen");
-			exit(1);
-		}
-		pos = 0;
-	}
-	void close()
-	{
-		if(bitpos)
-		{
-			pos++;
-			bitpos=0;
-		}
-
-		if(f)
-		{
-			flush();
-			fclose(f);
-			f = NULL;
-		}
-	}
-	void writeUint(unsigned int val)
-	{
-		assert(bitpos == 0);//don't mix bits with uints
-
-		buffer[pos++] = val;
-		if(pos == BWSIZE)
-			flush();
-	}
-	void writeBit(bool val)
-	{
-		if(bitpos == 0)
-			buffer[pos] = val;
-		else
-			buffer[pos] |= (val << bitpos);
-
-		if(++bitpos == 32)
-		{
-			bitpos = 0;
-			if(++pos == BWSIZE)
-				flush();
-		}
-	}
-};
 
 /**************
  * Database
@@ -163,18 +74,18 @@ wikistatus_t wikistatus[MAX_WIKI_PAGEID+1];
 int wikigraphId[MAX_WIKI_PAGEID+1];
 //Total of 150MB of memory
 
-bool stat_handler(double percent)
-{
-	printf("  %5.2lf%%\n", percent);
-	return (percent < STOP_AFTER_PRECENT);
-}
-
 /**************
  * STAGE 1
  * Create graph nodes and store relevant data about nodes
  */
 int graphNodes = 0;
 int article_count, category_count, art_redirect_count, cat_redirect_count;
+
+bool stat_handler(double percent)
+{
+	printf("  %5.2lf%%\n", percent);
+	return (percent < STOP_AFTER_PRECENT);
+}
 
 BufferedWriter *node_is_category;
 
@@ -231,9 +142,9 @@ void page(const vector<string> &data)
 	int graphId;
 	if(is_redir)
 	{
-		reply = (redisReply*)redisCommand(c, REDISCMD_SETNX_WD, prefix, hash_1, hash_2, wikiId );
+		reply = (redisReply*)redisCommand(c, REDISCMD_SETNX_WD, prefix, hash_key, wikiId );
 #ifdef DEBUG
-		printf("redirect %s%s  key=%s%s %s (wikiId=%d)\n", prefix, title, prefix, hash_1, hash_2, wikiId);
+		printf("redirect %s%s  key=%s%s (wikiId=%d)\n", prefix, title, prefix, hash_key, wikiId);
 #endif
 	}
 	else
@@ -241,7 +152,7 @@ void page(const vector<string> &data)
 		graphId = ++graphNodes; //generate from local storage; could have use INCR from redis
 		node_is_category->writeBit(namespc == NS_CATEGORY);
 
-		reply = (redisReply*)redisCommand(c, REDISCMD_SETNX_D , prefix, hash_1, hash_2, graphId );
+		reply = (redisReply*)redisCommand(c, REDISCMD_SETNX_D, prefix, hash_key, graphId );
 #ifdef DEBUG
 		printf("graph[%d] = %s%s  (wikiId=%d)\n", graphId, prefix, title, wikiId);
 #endif
@@ -250,12 +161,9 @@ void page(const vector<string> &data)
 	{
 		freeReplyObject(reply);
 		printf("Collission found!\nHow to fix?\n 1. Empty the database,\n");
-		printf(" 2. If that fails, try adding salt to md5, or increase keylen_1/keylen_2.\n");
-		printf("Title:'%s' key1=%s key2=%s\n", title, hash_1, hash_2);
+		printf(" 2. If that fails, try adding salt to md5, or increase keylen/keylen_2.\n");
+		printf("Title:'%s' hash_key=%s\n", title, hash_key);
 
-		//reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2 );
-		//printf("Collision with: '%s'\n", reply->str);
-		//freeReplyObject(reply);
 		exit(1);
 	}
 	freeReplyObject(reply);
@@ -263,7 +171,7 @@ void page(const vector<string> &data)
 	if(is_redir)
 	{
 		wikistatus[wikiId].type = 2; //redirect
-		reply = (redisReply*)redisCommand(c, "SET w:%d %s%s%s", wikiId, prefix, hash_1, hash_2);
+		reply = (redisReply*)redisCommand(c, "SET w:%d %s%s", wikiId, prefix, hash_key);
 		freeReplyObject(reply);
 	}
 	else
@@ -296,11 +204,11 @@ void main_stage1()
  * Resolve redirects
  */
 
-int cnt_still_redir;
+int cnt_unresolved_redir;
 
 bool stat_handler2(double percent)
 {
-	printf("  %5.2lf%%  unresolved=%d\n", percent, cnt_still_redir);
+	printf("  %5.2lf%%  unresolved=%d\n", percent, cnt_unresolved_redir);
 	return (percent < STOP_AFTER_PRECENT);
 }
 
@@ -334,20 +242,20 @@ void redirect(const vector<string> &data)
 #endif
 
 	// Check target
-	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
+	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_key);
 
 	if(reply->type == REDIS_REPLY_NIL || !isdigit(reply->str[0]))
 	{
 		freeReplyObject(reply);
 		// Target is still a redirect
-		cnt_still_redir++;
+		cnt_unresolved_redir++;
 	}
 	else
 	{
 		// Target is valid page (or resolved redirect)
 		int graphId = atoi(reply->str);
 		freeReplyObject(reply);
-		// Need to get prefix:hash of a page based on its wikiId
+		// Need to get prefix:hash_key of a page based on its wikiId
 		reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId);
 		assert(reply->type == REDIS_REPLY_STRING);
 		assert(reply->str[1] == ':');
@@ -355,11 +263,10 @@ void redirect(const vector<string> &data)
 			prefix = "a:";
 		else
 			prefix = "c:";
-		strncpy(hash_1, reply->str+2, keylen_1*2);
-		strncpy(hash_2, reply->str+2+keylen_1*2, keylen_2*2);
+		strncpy(hash_key, reply->str+2, keylen*2);
 		freeReplyObject(reply);
 
-		reply = (redisReply*)redisCommand(c, REDISCMD_SET_D, prefix, hash_1, hash_2, graphId);
+		reply = (redisReply*)redisCommand(c, REDISCMD_SET_D, prefix, hash_key, graphId);
 		freeReplyObject(reply);
 
 		wikistatus[wikiId].type = 3; //resolved redirect
@@ -379,9 +286,9 @@ void main_stage2()
 	int i=0;
 	do
 	{
-		prev_count = cnt_still_redir;
+		prev_count = cnt_unresolved_redir;
 
-		cnt_still_redir = 0;
+		cnt_unresolved_redir = 0;
 		SqlParser *parser = SqlParser::open(DUMPFILES"redirect.sql");
 		parser->set_data_handler(redirect);
 		parser->set_stat_handler(stat_handler2);
@@ -389,50 +296,20 @@ void main_stage2()
 		parser->run();
 		parser->close();
 		delete parser;
-		printf("Unresolved redirects: %d\n", cnt_still_redir);
+		printf("Unresolved redirects: %d\n", cnt_unresolved_redir);
 		i++;
 	}
-	while(cnt_still_redir && cnt_still_redir != prev_count && i < REDIR_MAX);
+	while(cnt_unresolved_redir && cnt_unresolved_redir != prev_count && i < REDIR_MAX);
 }
-
 
 /**************
  * STAGE 3
  * Handle pagelinks in order to generate directed graph between articles
  */
 unsigned int num_edges, pagelink_rows;
-FILE *graphout;
 int skipped_catlinks, skipped_fromcat_links;
 
-int cur_graphId;
-vector<int> graphedges;
-
-BufferedWriter *node_begin_list;
-BufferedWriter *edge_list;
-
-void write_graphId(int from_graphId)
-{
-	// Assert that pagelinks are exported with: mysqldump --order-by-primary
-	assert(from_graphId >= cur_graphId);
-
-	if(from_graphId != cur_graphId)
-	{
-		for(int i=cur_graphId; i< from_graphId; i++)
-		{
-			// For each node write the beginning of its edge list
-			node_begin_list->writeUint(num_edges);
-		}
-
-		for(size_t i=0;i<graphedges.size();i++)
-		{
-			edge_list->writeUint(graphedges[i]);
-		}
-		num_edges += graphedges.size();
-		graphedges.clear();
-
-		cur_graphId = from_graphId;
-	}
-}
+GraphWriter *graph;
 
 /* SQL schema */
 #define pl_from 0 // int(8) unsigned NOT NULL DEFAULT '0',
@@ -454,7 +331,7 @@ void pagelink(const vector<string> &data)
 	}
 	int from_graphId = wikigraphId[wikiId];
 
-	write_graphId(from_graphId);
+	graph->write_graphId(from_graphId);
 
 	int namespc = atoi(data[pl_namespace].c_str());
 
@@ -475,7 +352,7 @@ void pagelink(const vector<string> &data)
 	int title_len = data[pl_title].size();
 	calc_hash(title, title_len);
 
-	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
+	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_key);
 	if(reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0]))
 	{
 		int to_graphId = atoi(reply->str);
@@ -484,7 +361,7 @@ void pagelink(const vector<string> &data)
 	printf("link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
 			from_graphId, wikiId, prefix, title, to_graphId, wikistatus[to_graphId].type);
 #endif
-		graphedges.push_back(to_graphId);
+		graph->write_edge(to_graphId);
 	}
 	freeReplyObject(reply);
 }
@@ -495,20 +372,7 @@ void main_stage3()
 	parser->set_data_handler(pagelink);
 	parser->set_stat_handler(stat_handler);
 
-	node_begin_list = new BufferedWriter("graph_nodes.bin");
-	edge_list = new BufferedWriter("graph_edges.bin");
-
 	parser->run();
-
-	// Trick to force last nodes to be written
-	while(cur_graphId <= graphNodes + 1)
-		write_graphId(cur_graphId + 1);
-
-	node_begin_list->close();
-	delete node_begin_list;
-
-	edge_list->close();
-	delete edge_list;
 
 	parser->close();
 	delete parser;
@@ -539,14 +403,14 @@ void categorylinks(const vector<string> &data)
 	int title_len = data[cl_to].size();
 	calc_hash(title, title_len);
 
-	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
+	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_key);
 	if(reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0]))
 	{
 		int to_graphId = atoi(reply->str);
 		freeReplyObject(reply);
 
 #ifdef DEBUG
-	printf("category link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
+	printf("category link:  graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
 			from_graphId, wikiId, prefix, title, to_graphId, wikistatus[to_graphId].type);
 #endif
 		reply = (redisReply*)redisCommand(c, "SADD cl:%d %d", from_graphId, to_graphId);
@@ -566,6 +430,21 @@ void main_stage4()
 
 	parser->close();
 	delete parser;
+
+	for(int graphId=1; graphId<=graphNodes; graphId++)
+	{
+		reply = (redisReply*)redisCommand(c, "SMEMBERS cl:%d", graphId);
+		if(reply->type == REDIS_REPLY_ARRAY)
+		{
+			int n = reply->elements;
+			for(int i=0; i<n; i++)
+			{
+				int to_graphId = atoi(reply->element[i]->str);
+				printf("%d = %d\n", graphId, to_graphId);
+			}
+		}
+		freeReplyObject(reply);
+	}
 }
 
 /*****

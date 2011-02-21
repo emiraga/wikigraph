@@ -10,12 +10,6 @@
 #define DUMPFILES "mysqldumps/localdump-"
 #endif /* DEBUG */
 
-/* Using redis hashes is supposed to reduce memory usage
- * like they say in this page http://redis.io/topics/memory-optimization 
- * I did not achieve any significand savings, probably because of wrong config.
- */
-//#define USE_REDIS_HASH
-
 // Used in debugging, normally 101
 #define STOP_AFTER_PRECENT 101
 
