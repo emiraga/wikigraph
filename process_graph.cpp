@@ -20,65 +20,15 @@ using namespace std;
 #define RESULTS_EXPIRE 60 // Seconds
 #define MAXNODES 4250000 // maximum number of graph nodes
 typedef pair<int,int> pii;
-
-int node_begin_list[MAXNODES];
-#define node_end_list(x) (node_begin_list[(x)+1])
-int *edges;
+typedef unsigned int uint;
 
 int num_nodes;
+uint node_begin_list[MAXNODES];
+#define node_end_list(x) (node_begin_list[(x)+1])
+uint node_iscat[MAXNODES/32];
+#define IS_CATEGORY(x) (node_iscat[(x)>>5] & (1<<((x)&31)))
 
-void load_graph()
-{
-	FILE *f = fopen("graph_edges.bin", "rb");
-	if(!f)
-	{
-		fprintf(stderr, "file not found, graph_edges.bin\n" );
-		exit(1);
-	}
-
-	fseek(f, 0, SEEK_END);
-	off_t fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	edges = new int[fsize]; // May God have mercy on our souls
-	if(!edges)
-	{
-		fprintf(stderr, "malloc failed\n");
-		exit(1);
-	}
-	size_t res = fread(edges, 1, fsize, f);
-	if(res != fsize)
-	{
-		fprintf(stderr, "Read error res=%u\n", res);
-		exit(1);
-	}
-	fclose(f);
-
-	f = fopen("graph_nodes.bin", "rb");
-	if(!f)
-	{
-		fprintf(stderr, "file not found, graph_nodes.bin\n" );
-		exit(1);
-	}
-
-	fseek(f, 0, SEEK_END);
-	fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	num_nodes = (fsize/4) - 2; //two are guard value at the beginning and end
-
-	// Assure that we don't exceed maximum number of nodes
-	assert(num_nodes < MAXNODES);
-
-	res = fread(node_begin_list, 1, fsize, f);
-	if(res != fsize)
-	{
-		fprintf(stderr, "Read error res=%u\n", res);
-		exit(1);
-	}
-	fclose(f);
-	printf("Graph lodaded with %d nodes.\n", num_nodes);
-}
+uint *edges;
 
 int dist[MAXNODES];
 int queue[MAXNODES];
@@ -92,6 +42,7 @@ vector<int> get_distances(int start)
 	memset(dist, -1, sizeof(dist));
 	dist[start] = 0;
 	queue[0] = start;
+	dist_count[0]++;
 	int queuesize = 1;
 	for(int top=0;top<queuesize;top++)
 	{
@@ -112,7 +63,7 @@ vector<int> get_distances(int start)
 		}
 	}
 	vector<int> result;
-	for(int i=1;i<DIST_ARRAY;i++)
+	for(int i=0;i<DIST_ARRAY;i++)
 	{
 		if(!dist_count[i])
 			return result;
@@ -148,44 +99,6 @@ vector<pii> count_items(vector<int> &v)
 	return result;
 }
 
-void test_count_items()
-{
-	vector<int> t;
-	vector<pii> r;
-	r = count_items(t);
-	assert(r.size() == 0);
-
-	t.push_back(3);
-	r = count_items(t);
-	assert(r.size() == 1 && r[0].first == 3 && r[0].second == 1);
-
-	t.push_back(3);
-	r = count_items(t);
-	assert(r.size() == 1 && r[0].first == 3 && r[0].second == 2);
-
-	t.push_back(3);
-	r = count_items(t);
-	assert(r.size() == 1 && r[0].first == 3 && r[0].second == 3);
-
-	t.push_back(4);
-	r = count_items(t);
-	assert(r.size() == 2 
-			&& r[0].first == 3 && r[0].second == 3
-			&& r[1].first == 4 && r[1].second == 1 );
-
-	t.push_back(4);
-	r = count_items(t);
-	assert(r.size() == 2 
-			&& r[0].first == 3 && r[0].second == 3
-			&& r[1].first == 4 && r[1].second == 2 );
-
-	t.push_back(3);
-	r = count_items(t);
-	assert(r.size() == 2 
-			&& r[0].first == 3 && r[0].second == 4
-			&& r[1].first == 4 && r[1].second == 2 );
-}
-
 int* get_int_array(int size, int init)
 {
 	int* res = (int*)malloc(sizeof(int)*size);
@@ -218,7 +131,8 @@ vector<pii> scc_tarjan()
 #ifdef DEBUG
 		printf("processing node %d\n", k);
 #endif
-		if(nodeindex[k] == -1)
+		// This node should not be previously visited and not be a category
+		if(nodeindex[k] == -1 && !IS_CATEGORY(k))
 		{
 			if(k&255 == 0)printf("%d\n", k);
 			// Push to execution stack
@@ -251,7 +165,7 @@ vector<pii> scc_tarjan()
 				for( ; i<node_end_list(node); i++)
 				{
 					int dest = edges[i];
-					if(nodeindex[dest] == -1)
+					if(nodeindex[dest] == -1) // Not visited
 					{
 						// Push dest to execution stack
 						stacknode[++top] = dest;
@@ -306,6 +220,48 @@ vector<pii> scc_tarjan()
 	return count_items(scc_result);
 }
 
+uint* file_to_array(const char *fname, uint *array)
+{
+	FILE *f = fopen(fname, "rb");
+	if(!f)
+	{
+		fprintf(stderr, "file not found, %s\n", fname);
+		exit(1);
+	}
+
+	fseek(f, 0, SEEK_END);
+	off_t fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	if(!array)
+	{
+		array = new uint[fsize];
+		if(!array)
+		{
+			fprintf(stderr, "new/malloc failed\n");
+			exit(1);
+		}
+	}
+
+	size_t res = fread(array, 1, fsize, f);
+	if(res != fsize)
+	{
+		fprintf(stderr, "Read error res=%u\n", res);
+		exit(1);
+	}
+	fclose(f);
+	return array;
+}
+
+void load_graph()
+{
+	edges = file_to_array("graph_edges.bin", NULL);
+
+	file_to_array("graph_nodes.bin", node_begin_list);
+
+	file_to_array("graph_nodeiscat.bin", node_iscat);
+}
+
 string to_json(const vector<int> &v)
 {
 	string msg = "[";
@@ -348,8 +304,6 @@ void print_help(char *prg)
 
 int main(int argc, char *argv[])
 {
-	test_count_items();
-
 	int fork_off = 0;
 
 	char redis_host[51] = REDISHOST;
@@ -415,6 +369,20 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	redisReply *reply = (redisReply*)redisCommand(c,"GET s:count:Graph_nodes");
+	assert(reply->type == REDIS_REPLY_STRING);
+
+	num_nodes = atoi(reply->str);
+	freeReplyObject(reply);
+
+	if(is_parent)
+	{
+		printf("Number of nodes %d\n", num_nodes);
+	}
+
+	// Assure that we don't exceed maximum number of nodes
+	assert(num_nodes < MAXNODES);
+
 	while(1)
 	{
 		// Wait for a job on the queue
@@ -436,25 +404,28 @@ int main(int argc, char *argv[])
 		switch(job[0])
 		{
 			case 'D':{ //count distances from node
-				int node = atoi(job+1);
-				if(node < 1 || node > num_nodes)
-				{
-					result = "{\"error\":\"Node out of range\"}";
-				}
-				else
-				{
-					vector<int> cntdist = get_distances(node);
-					result = "{\"count_dist\":" + to_json(cntdist) + "}";
-				}
 #ifdef DEBUG
 				// Simulate slow processing
 				usleep(1000 * 100);
 #endif
+				int node = atoi(job+1);
+				if(node < 1 || node > num_nodes)
+				{
+					result = "{\"error\":\"Node out of range\"}";
+					break;
+				}
+				if(IS_CATEGORY(node))
+				{
+					result = "{\"error\":\"Node is category\"}";
+					break;
+				}
+				vector<int> cntdist = get_distances(node);
+				result = "{\"count_dist\":" + to_json(cntdist) + "}";
 			}
 			break;
 			case 'S':{ // Sizes of strongly connected components
 				vector<pii> components = scc_tarjan();
-				result = "{\"component_sizes\":" + to_json(components) + "}";
+				result = "{\"components\":" + to_json(components) + "}";
 			}
 			break;
 			case 'P':{ // PING 'Are you still there?' (in GLaDOS voice)

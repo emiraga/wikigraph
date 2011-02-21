@@ -74,9 +74,11 @@ class BufferedWriter
 	unsigned int buffer[BWSIZE];
 	FILE *f;
 	size_t pos;
+	int bitpos;
+
 public:
 	BufferedWriter(const char *name)
-		:pos(0), f(fopen(name, "wb"))
+		:pos(0), f(fopen(name, "wb")), bitpos(0)
 	{
 		if(!f)
 		{
@@ -100,6 +102,12 @@ public:
 	}
 	void close()
 	{
+		if(bitpos)
+		{
+			pos++;
+			bitpos=0;
+		}
+
 		if(f)
 		{
 			flush();
@@ -109,10 +117,24 @@ public:
 	}
 	void writeUint(unsigned int val)
 	{
+		assert(bitpos == 0);//don't mix bits with uints
+
 		buffer[pos++] = val;
 		if(pos == BWSIZE)
-		{
 			flush();
+	}
+	void writeBit(bool val)
+	{
+		if(bitpos == 0)
+			buffer[pos] = val;
+		else
+			buffer[pos] |= (val << bitpos);
+
+		if(++bitpos == 32)
+		{
+			bitpos = 0;
+			if(++pos == BWSIZE)
+				flush();
 		}
 	}
 };
@@ -156,6 +178,8 @@ int broken[-2];
 int graphNodes = 0;
 int article_count, category_count, art_redirect_count, cat_redirect_count;
 
+BufferedWriter *node_is_category;
+
 /* SQL schema */
 #define page_id 0 // int(8) unsigned NOT NULL AUTO_INCREMENT,
 #define page_namespace 1 // int(11) NOT NULL DEFAULT '0',
@@ -186,7 +210,9 @@ void page(const vector<string> &data)
 		if(is_redir)
 			art_redirect_count++;
 		else
+		{
 			article_count++;
+		}
 	}
 	else if(namespc == NS_CATEGORY) //Categories
 	{
@@ -194,7 +220,9 @@ void page(const vector<string> &data)
 		if(is_redir)
 			cat_redirect_count++;
 		else
+		{
 			category_count++;
+		}
 #ifdef USE_LOCAL_STORAGE
 		wikistatus[wikiId].is_category = 1;
 #else
@@ -219,6 +247,7 @@ void page(const vector<string> &data)
 	else
 	{
 		graphId = ++graphNodes; //generate from local storage; could have use INCR from redis
+		node_is_category->writeBit(namespc == NS_CATEGORY);
 
 		reply = (redisReply*)redisCommand(c, REDISCMD_SETNX_D , prefix, hash_1, hash_2, graphId );
 #ifdef DEBUG
@@ -271,8 +300,14 @@ void main_stage1()
 	SqlParser *parser = SqlParser::open(DUMPFILES"page.sql");
 	parser->set_data_handler(page);
 	parser->set_stat_handler(stat_handler);
+	node_is_category = new BufferedWriter("graph_nodeiscat.bin");
+	node_is_category->writeBit(0); //graphId starts from 1
 
 	parser->run();
+
+	node_is_category->close();
+	delete node_is_category;
+
 	parser->close();
 	delete parser;
 }
@@ -519,9 +554,10 @@ void main_stage3()
 	edge_list = new BufferedWriter("graph_edges.bin");
 
 	parser->run();
-	// Trick to force that last node to be written
-	write_graphId(cur_graphId + 1);
-	write_graphId(cur_graphId + 1);
+
+	// Trick to force last nodes to be written
+	while(cur_graphId <= graphNodes + 1)
+		write_graphId(cur_graphId + 1);
 
 	node_begin_list->close();
 	delete node_begin_list;
