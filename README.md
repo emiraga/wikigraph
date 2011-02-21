@@ -3,7 +3,7 @@ Story
 
 Some of you might remember [Six degrees of Wikipedia](http://www.netsoc.tcd.ie/~mu/wiki/) by Stephen Dolan. That was done in 2007 and I though it would be a good idea to see what has changed since then.
 
-I started with a [XML parser](https://github.com/emiraga/wikigraph/blob/f4ee89d28efc93f4b44d7ccea4b036aa3db806f6/xmlparse.py) just like Stephen, but later decided to parse SQL files instead, since they contain all information we need, and admittedly wiki parsing is much more difficult. As far as database goes, I needed one which was in-memory (including VM capabilities), and one that supports more complex data structures such as queues (distributed processing). Needless to say: [redis](http://redis.io/) was database of choice. Code is available freely for experimentation and finding potential mistakes I might have made.
+I started with a [XML parser](https://github.com/emiraga/wikigraph/blob/f4ee89d28efc93f4b44d7ccea4b036aa3db806f6/xmlparse.py) just like Stephen, but later decided to parse SQL files instead, since they contain all information we need, and admittedly wiki parsing is much more difficult. As far as database goes, I needed one which was in-memory (including VM capabilities), and one that supports more complex data structures such as queues (distributed processing). Needless to say: [redis](http://redis.io/) was database of choice. Code is available freely for experimentation and finding potential mistakes I made.
 
 Mediawiki database schema
 -------------------------
@@ -15,7 +15,7 @@ Page links can be between any two pages. Meaning that article/category can link 
 
 <img src="http://i.imgur.com/dJlSF.png" alt="" title="Hosted by imgur.com" />
 
-Gray links in above figure are ignored to keep things simple and since they are rarely used on wikipedia. Let me know if you have justification for doing otherwise.
+Gray links in above figure are ignored to keep things simple and they are rarely used on wikipedia. Let me know if you have justification for doing otherwise.
 
 Category links have different meaning from page links. Page links are uni-directional, whereas category links are in both directions. An article/category **belongs** to another category and some category **has** articles/categories in it.
 
@@ -38,7 +38,7 @@ To do analysis of real wikipedia database, download dumps from [english wikipedi
 
 Edit `config.h` and compile binaries
     make
-Start redis server, preferably with unix socket `/tmp/redis.sock`. Generating graph is database-intensive operation, and unix socket will speed things up a bit.
+Start redis server, preferably with unix socket `/tmp/redis.sock`. Generating graph is database-intensive operation, and unix socket will speed things up a bit. Also, I have disabled automated background saves, they can become annoying, instead I call them manually at the end of processing.
 
 On a single machine first generate `graph*.bin`
     bin/generate_graph

@@ -146,7 +146,6 @@ public:
  * reduce memory usage of redis server by storing certain keys in an array
  * rather than the database.
  */
-#ifdef USE_LOCAL_STORAGE
 
 #define MAX_WIKI_PAGEID 30500000 // current value is 30480288
 
@@ -164,12 +163,11 @@ wikistatus_t wikistatus[MAX_WIKI_PAGEID+1];
 int wikigraphId[MAX_WIKI_PAGEID+1];
 //Total of 150MB of memory
 
-#ifdef USE_REDIS_HASH
-#error "Redis hashes currently don't work, is_category is not implemented"
-int broken[-2]; 
-#endif
-
-#endif /* USE_LOCAL_STORAGE */
+bool stat_handler(double percent)
+{
+	printf("  %5.2lf%%\n", percent);
+	return (percent < STOP_AFTER_PRECENT);
+}
 
 /**************
  * STAGE 1
@@ -199,9 +197,7 @@ void page(const vector<string> &data)
 	int namespc = atoi(data[page_namespace].c_str());
 
 	int wikiId = atoi(data[page_id].c_str());
-#ifdef USE_LOCAL_STORAGE
 	assert(wikiId <= MAX_WIKI_PAGEID);
-#endif
 
 	const char *prefix;
 	if(namespc == NS_MAIN) //Articles
@@ -223,11 +219,7 @@ void page(const vector<string> &data)
 		{
 			category_count++;
 		}
-#ifdef USE_LOCAL_STORAGE
 		wikistatus[wikiId].is_category = 1;
-#else
-		int not_implemented[-2];
-#endif
 	}
 	else
 		return; //other namespaces are not interesting
@@ -270,29 +262,16 @@ void page(const vector<string> &data)
 
 	if(is_redir)
 	{
-#ifdef USE_LOCAL_STORAGE
 		wikistatus[wikiId].type = 2; //redirect
-#endif
 		reply = (redisReply*)redisCommand(c, "SET w:%d %s%s%s", wikiId, prefix, hash_1, hash_2);
 		freeReplyObject(reply);
 	}
 	else
 	{
-#ifdef USE_LOCAL_STORAGE
 		wikistatus[wikiId].type = 1; //regular
 		wikigraphId[wikiId] = graphId;
-#else
-		reply = (redisReply*)redisCommand(c, "SET w:%d %d", wikiId, graphId );
-		freeReplyObject(reply);
-#endif
 	}
 	return;
-}
-
-bool stat_handler(double percent)
-{
-	printf("  %5.2lf%%\n", percent);
-	return (percent < STOP_AFTER_PRECENT);
 }
 
 void main_stage1()
@@ -334,20 +313,8 @@ void redirect(const vector<string> &data)
 {
 	int wikiId = atoi(data[rd_from].c_str());
 	// Check is redirect was resolved previously
-#ifdef USE_LOCAL_STORAGE
 	if(wikistatus[wikiId].type != 2)
 		return;
-#else
-	reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId );
-	assert(reply->type != REDIS_REPLY_NIL);
-	if(isdigit(reply->str[0]))
-	{
-		// Redirect is already resolved
-		freeReplyObject(reply);
-		return;
-	}
-	freeReplyObject(reply);
-#endif
 	int namespc = atoi(data[rd_namespace].c_str());
 
 	const char *prefix;
@@ -395,18 +362,12 @@ void redirect(const vector<string> &data)
 		reply = (redisReply*)redisCommand(c, REDISCMD_SET_D, prefix, hash_1, hash_2, graphId);
 		freeReplyObject(reply);
 
-#ifdef USE_LOCAL_STORAGE
 		wikistatus[wikiId].type = 3; //resolved redirect
 		wikigraphId[wikiId] = graphId;
 
 		// This key is no longer needed
 		reply = (redisReply*)redisCommand(c, "DEL w:%d", wikiId);
 		freeReplyObject(reply);
-#else
-		reply = (redisReply*)redisCommand(c, "SET w:%d %dr", wikiId, graphId);
-		// This extra 'r' at the end denotes that it is a resolved redirect
-		freeReplyObject(reply);
-#endif
 	}
 }
 
@@ -484,7 +445,6 @@ void pagelink(const vector<string> &data)
 	int wikiId = atoi(data[pl_from].c_str());
 
 	// Check if this page exists and is regular (not redirect)
-#ifdef USE_LOCAL_STORAGE
 	if(wikistatus[wikiId].type != 1) // If it is not regular page skip it
 		return;
 	if(wikistatus[wikiId].is_category)
@@ -493,21 +453,6 @@ void pagelink(const vector<string> &data)
 		return; //skip links from categories
 	}
 	int from_graphId = wikigraphId[wikiId];
-#else
-	reply = (redisReply*)redisCommand(c, "GET w:%d", wikiId );
-	int replyLen = strlen(reply->str);
-	assert(reply->type != REDIS_REPLY_NIL);//if there is no such page
-
-	// Check if this is a regular page
-	if( !isdigit(reply->str[0]) //redirects start with non-digit
-	||  !isdigit(reply->str[replyLen-1]) ) //resolved redirects end with non-digit
-	{
-		freeReplyObject(reply);
-		return;
-	}
-	int from_graphId = atoi(reply->str);
-	freeReplyObject(reply);
-#endif /* USE_LOCAL_STORAGE */
 
 	write_graphId(from_graphId);
 
@@ -569,6 +514,60 @@ void main_stage3()
 	delete parser;
 }
 
+/**************
+ * STAGE 4
+ */
+int catlinks = 0;
+
+#define cl_from 0 // int(10) unsigned NOT NULL DEFAULT '0',
+#define cl_to 1 // varbinary(255) NOT NULL DEFAULT '',
+#define cl_sortkey 2 // varbinary(70) NOT NULL DEFAULT '',
+#define cl_timestamp 3 // timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+/* SQL schema */
+
+void categorylinks(const vector<string> &data)
+{
+	int wikiId = atoi(data[cl_from].c_str());
+	if(wikistatus[wikiId].type != 1) // If it is not regular page skip it
+		return;
+	int from_graphId = wikigraphId[wikiId];
+
+	const char *prefix = "c:"; // target is always a category
+
+	const char *title = data[cl_to].c_str();
+	int title_len = data[cl_to].size();
+	calc_hash(title, title_len);
+
+	reply = (redisReply*)redisCommand(c, REDISCMD_GET, prefix, hash_1, hash_2);
+	if(reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0]))
+	{
+		int to_graphId = atoi(reply->str);
+		freeReplyObject(reply);
+
+#ifdef DEBUG
+	printf("category link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
+			from_graphId, wikiId, prefix, title, to_graphId, wikistatus[to_graphId].type);
+#endif
+		reply = (redisReply*)redisCommand(c, "SADD cl:%d %d", from_graphId, to_graphId);
+		freeReplyObject(reply);
+		reply = (redisReply*)redisCommand(c, "SADD cl:%d %d", to_graphId, from_graphId);
+	}
+	freeReplyObject(reply);
+}
+
+void main_stage4()
+{
+	SqlParser *parser = SqlParser::open(DUMPFILES"categorylinks.sql");
+	parser->set_data_handler(categorylinks);
+	parser->set_stat_handler(stat_handler);
+
+	parser->run();
+
+	parser->close();
+	delete parser;
+}
+
 /*****
  * 
  */
@@ -600,9 +599,17 @@ int main(int argc, char *argv[])
 
 	printf("Starting stage 3\n");
 	main_stage3();
-	reply = (redisReply*)redisCommand(c, "SET s:count:Edges %d", num_edges ); freeReplyObject(reply);
+	reply = (redisReply*)redisCommand(c, "SET s:count:Article_links %d", num_edges ); freeReplyObject(reply);
 	reply = (redisReply*)redisCommand(c, "SET s:count:Ignored_links_from_category %d", skipped_fromcat_links ); freeReplyObject(reply);
 	reply = (redisReply*)redisCommand(c, "SET s:count:Ignored_links_to_category %d", skipped_catlinks ); freeReplyObject(reply);
+
+	printf("Starting stage 4\n");
+	main_stage4();
+	reply = (redisReply*)redisCommand(c, "SET s:count:Category_links %d", catlinks ); freeReplyObject(reply);
+
+	// Save database to disk
+	reply = (redisReply*)redisCommand(c, "SAVE");
+	freeReplyObject(reply);
 	return 0;
 }
 

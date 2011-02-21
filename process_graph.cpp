@@ -235,9 +235,12 @@ uint* file_to_array(const char *fname, uint *array)
 
 	if(!array)
 	{
-		array = new uint[fsize];
+		printf("Alocating %lu memory\n", fsize);
+
+		array = (uint*)malloc(fsize);
 		if(!array)
 		{
+			perror("malloc");
 			fprintf(stderr, "new/malloc failed\n");
 			exit(1);
 		}
@@ -460,7 +463,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	delete[] edges;
+	//delete[] edges;
+	free(edges);
 	return 0;
 }
 
