@@ -2,17 +2,17 @@
 
 if [ -z $1 ]; then
     maindir=`dirname $0`
-    files=`find $maindir | 
-      egrep "\.cc$|\.h$|\.cpp$|\.cxx$" | 
-      egrep -v "^$maindir/OLD/" | 
+    files=`find $maindir/src | egrep "\.cc$|\.h$|\.cpp$|\.cxx$" | 
+      # blacklist
       egrep -v "^$maindir/src/gtest/" | 
-      egrep -v "^$maindir/src/gmock/" | 
-      egrep -v "^$maindir/CMakeFiles/"`
+      egrep -v "^$maindir/src/hiredis/" | 
+      egrep -v "^$maindir/src/gmock/" |
+      cat`
 else
     files=$*
 fi
 tail -n +30 < $0 | python - --filter=-build/include $files
-# in don't have much directories, so 'build/include' warning can be ignored
+# I don't have much directories, so 'build/include' warning can be ignored
 
 exit
 

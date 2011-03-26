@@ -13,7 +13,7 @@
 
 namespace wikigraph {
 
-const unsigned int kBufferSize = 1024*1024;  // Buffer size
+const unsigned int kBufferSize = 1024*1024;  // for buffered reader and writer
 
 class SystemFile {
  public:
@@ -30,6 +30,15 @@ class SystemFile {
   }
   int close() {
     return ::fclose(f_);
+  }
+  off_t tell() {
+    return ::ftello(f_);
+  }
+  int seek(off_t offset, int whence) {
+    return ::fseeko(f_, offset, whence);
+  }
+  int eof() {
+    return ::feof(f_);
   }
  private:
   FILE *f_;
@@ -48,7 +57,7 @@ class BufferedWriter {
   }
 
   void flush() {
-    size_t res = file_->write(buffer, 4, pos_);
+    size_t res = file_->write(buffer_, 4, pos_);
     assert(res == pos_);
     pos_ = 0;
   }
@@ -72,16 +81,16 @@ class BufferedWriter {
   void write_uint(uint32_t val) {
     assert(bitpos_ == 0);  // Don't mix bits with uints
 
-    buffer[pos_++] = val;
+    buffer_[pos_++] = val;
     if (PREDICT_FALSE(pos_ == kBufferSize))
       flush();
   }
 
   void write_bit(bool val) {
     if (PREDICT_FALSE(bitpos_ == 0))
-      buffer[pos_] = val;
+      buffer_[pos_] = val;
     else
-      buffer[pos_] |= (val << bitpos_);
+      buffer_[pos_] |= (val << bitpos_);
 
     bitpos_++;
     if (PREDICT_FALSE(bitpos_ == 32)) {
@@ -96,13 +105,81 @@ class BufferedWriter {
     return file_->write(ptr, size, nmemb);
   }
  private:
-  uint32_t buffer[kBufferSize];
+  uint32_t buffer_[kBufferSize];
   File *file_;
   size_t pos_;
   int bitpos_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(BufferedWriter);
+};
+
+// Read data in units from file
+template<class File, class UnitType>
+class BufferedReader {
+ public:
+  explicit BufferedReader(File *f)
+      :file_(f), read_size_(0), index_(0) {
+  }
+
+  ~BufferedReader() {
+    close();
+  }
+
+  bool eof() const {
+    return file_->eof();
+  }
+
+  void close() {
+    if (file_ == NULL)
+      return;
+
+    file_->close();
+    file_ = NULL;
+  }
+
+  UnitType read_unit() {
+    index_++;
+    if (PREDICT_FALSE(index_ >= read_size_)) {
+      index_ = 0;
+      read_buffer();
+    }
+    return buffer_[index_];
+  }
+
+  UnitType peek_unit() {
+    if (PREDICT_FALSE(index_+1 >= read_size_)) {
+      index_ = -1;
+      read_buffer();
+    }
+    return buffer_[index_+1];
+  }
+
+  // Read from back is not buffered, and should not be done very often
+  void read_from_back(UnitType *ptr, size_t nmemb) {
+    // calculate current position
+    off_t pos = file_->tell();
+
+    // Read from back
+    file_->seek(-off_t(sizeof(UnitType)*nmemb), SEEK_END);
+    file_->read(ptr, sizeof(UnitType), nmemb);
+
+    // Return back to original position
+    file_->seek(pos, SEEK_SET);
+  }
+
+ private:
+  void read_buffer() {
+    read_size_ = file_->read(buffer_, sizeof(UnitType), kBufferSize);
+  }
+
+  UnitType buffer_[kBufferSize];
+  File *file_;
+  size_t read_size_;
+  size_t index_;
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(BufferedReader);
 };
 
 template<class FileWriter>
@@ -121,6 +198,7 @@ class GraphWriter {
   void start_node(node_t node) {
     assert(static_cast<int>(node) > 0);
     assert(static_cast<int>(node) <= nodes_);
+    assert(node > cur_node_);  // Nodes must be given in increasing order
     if (PREDICT_FALSE(cur_node_ != 0)) {
       end(cur_node_) = file_pos_;
     }
@@ -156,17 +234,17 @@ class GraphWriter {
   }
  private:
   // Refers to beginning of edge list for each node
-  node_t& start(int node) {
+  node_t& start(node_t node) {
     return list_[2 * node];
   }
   // End of edge list
-  node_t& end(int node) {
+  node_t& end(node_t node) {
     return list_[2 * node + 1];
   }
 
   FileWriter *writer_;
   int nodes_;  // number of nodes
-  int cur_node_;  // which node is currently active
+  node_t cur_node_;  // which node is currently active
   int file_pos_;  // nodes/edges not bytes
   node_t *list_;  // beginning and end of edge list for each node
  private:

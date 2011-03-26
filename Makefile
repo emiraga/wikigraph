@@ -132,53 +132,77 @@ gmock/gmock-gtest-all.cc.s:
 	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/gmock/gmock-gtest-all.cc.s
 .PHONY : gmock/gmock-gtest-all.cc.s
 
-run_tests.o: run_tests.cc.o
-.PHONY : run_tests.o
+tests/run_tests.o: tests/run_tests.cc.o
+.PHONY : tests/run_tests.o
 
 # target to build an object file
-run_tests.cc.o:
-	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/run_tests.cc.o
-.PHONY : run_tests.cc.o
+tests/run_tests.cc.o:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/run_tests.cc.o
+.PHONY : tests/run_tests.cc.o
 
-run_tests.i: run_tests.cc.i
-.PHONY : run_tests.i
+tests/run_tests.i: tests/run_tests.cc.i
+.PHONY : tests/run_tests.i
 
 # target to preprocess a source file
-run_tests.cc.i:
-	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/run_tests.cc.i
-.PHONY : run_tests.cc.i
+tests/run_tests.cc.i:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/run_tests.cc.i
+.PHONY : tests/run_tests.cc.i
 
-run_tests.s: run_tests.cc.s
-.PHONY : run_tests.s
+tests/run_tests.s: tests/run_tests.cc.s
+.PHONY : tests/run_tests.s
 
 # target to generate assembly for a file
-run_tests.cc.s:
-	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/run_tests.cc.s
-.PHONY : run_tests.cc.s
+tests/run_tests.cc.s:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/run_tests.cc.s
+.PHONY : tests/run_tests.cc.s
 
-test_writerlib.o: test_writerlib.cc.o
-.PHONY : test_writerlib.o
+tests/test_graph.o: tests/test_graph.cc.o
+.PHONY : tests/test_graph.o
 
 # target to build an object file
-test_writerlib.cc.o:
-	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/test_writerlib.cc.o
-.PHONY : test_writerlib.cc.o
+tests/test_graph.cc.o:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/test_graph.cc.o
+.PHONY : tests/test_graph.cc.o
 
-test_writerlib.i: test_writerlib.cc.i
-.PHONY : test_writerlib.i
+tests/test_graph.i: tests/test_graph.cc.i
+.PHONY : tests/test_graph.i
 
 # target to preprocess a source file
-test_writerlib.cc.i:
-	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/test_writerlib.cc.i
-.PHONY : test_writerlib.cc.i
+tests/test_graph.cc.i:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/test_graph.cc.i
+.PHONY : tests/test_graph.cc.i
 
-test_writerlib.s: test_writerlib.cc.s
-.PHONY : test_writerlib.s
+tests/test_graph.s: tests/test_graph.cc.s
+.PHONY : tests/test_graph.s
 
 # target to generate assembly for a file
-test_writerlib.cc.s:
-	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/test_writerlib.cc.s
-.PHONY : test_writerlib.cc.s
+tests/test_graph.cc.s:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/test_graph.cc.s
+.PHONY : tests/test_graph.cc.s
+
+tests/test_writerlib.o: tests/test_writerlib.cc.o
+.PHONY : tests/test_writerlib.o
+
+# target to build an object file
+tests/test_writerlib.cc.o:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/test_writerlib.cc.o
+.PHONY : tests/test_writerlib.cc.o
+
+tests/test_writerlib.i: tests/test_writerlib.cc.i
+.PHONY : tests/test_writerlib.i
+
+# target to preprocess a source file
+tests/test_writerlib.cc.i:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/test_writerlib.cc.i
+.PHONY : tests/test_writerlib.cc.i
+
+tests/test_writerlib.s: tests/test_writerlib.cc.s
+.PHONY : tests/test_writerlib.s
+
+# target to generate assembly for a file
+tests/test_writerlib.cc.s:
+	$(MAKE) -f CMakeFiles/run_tests.dir/build.make CMakeFiles/run_tests.dir/tests/test_writerlib.cc.s
+.PHONY : tests/test_writerlib.cc.s
 
 # Help Target
 help:
@@ -192,12 +216,15 @@ help:
 	@echo "... gmock/gmock-gtest-all.o"
 	@echo "... gmock/gmock-gtest-all.i"
 	@echo "... gmock/gmock-gtest-all.s"
-	@echo "... run_tests.o"
-	@echo "... run_tests.i"
-	@echo "... run_tests.s"
-	@echo "... test_writerlib.o"
-	@echo "... test_writerlib.i"
-	@echo "... test_writerlib.s"
+	@echo "... tests/run_tests.o"
+	@echo "... tests/run_tests.i"
+	@echo "... tests/run_tests.s"
+	@echo "... tests/test_graph.o"
+	@echo "... tests/test_graph.i"
+	@echo "... tests/test_graph.s"
+	@echo "... tests/test_writerlib.o"
+	@echo "... tests/test_writerlib.i"
+	@echo "... tests/test_writerlib.s"
 .PHONY : help
 
 

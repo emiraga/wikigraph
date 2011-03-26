@@ -38,7 +38,6 @@ CREATE TABLE `pagelinks` (
 
 LOCK TABLES `pagelinks` WRITE;
 /*!40000 ALTER TABLE `pagelinks` DISABLE KEYS */;
-INSERT INTO `pagelinks` VALUES (2,0,'Main_Page'),(3,0,'Main_Page_r1'),(4,0,'B'),(4,0,'Main_Page'),(4,0,'Main_Page_r2'),(4,0,'Main_Page_r3'),(4,0,'Selfjerk'),(5,0,'Main_Page_r2'),(7,0,'A'),(8,0,'LOOP2'),(9,0,'LOOP3'),(10,0,'LOOP1'),(11,0,'MESH3'),(11,0,'MESH5'),(12,0,'MESH1'),(12,0,'MESH2'),(13,0,'MESH3'),(13,0,'MESH4'),(13,0,'MESH5'),(14,0,'MESH1'),(15,0,'MESH3');
 /*!40000 ALTER TABLE `pagelinks` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -51,4 +50,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2011-02-22  2:27:29
+-- Dump completed on 2011-03-26 19:11:22

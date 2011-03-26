@@ -2,20 +2,24 @@ cmake_minimum_required ( VERSION 2.6 )
 add_definitions ( -Wall -fstrict-aliasing -Wstrict-aliasing=2 )
 find_package (Threads)
 
-
 include_directories (
-    ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR} 
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-#add_library ( graphlib
-#    graphlib.cc
-#)
+configure_file (
+  "${PROJECT_SOURCE_DIR}/config.h.in"
+  "${PROJECT_BINARY_DIR}/config.h"
+)
+
+#add_library ( graphlib   graphlib.cc)
 #target_link_libraries (test_graph graphlib)
 
 add_executable ( run_tests
-        test_writerlib.cc
+        tests/test_writerlib.cc
+        tests/test_graph.cc
         gmock/gmock-gtest-all.cc
-        run_tests.cc
+        tests/run_tests.cc
 )
 
 target_link_libraries (run_tests ${CMAKE_THREAD_LIBS_INIT})

@@ -10,3 +10,5 @@ CMakeCache.txt
 CMakeFiles
 cmake_install.cmake
 run_tests
+debug.sh
+core
