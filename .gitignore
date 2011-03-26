@@ -1,12 +1,12 @@
 xmldumps
 mysqldumps/enwiki*
 *.pyc
-tmp
-Your momma's so fat, I had to include her in .gitignore
 *.o
 *.bin
 bin/
 *.swp
-log.txt
-hiredis
 gmon.out
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+run_tests
