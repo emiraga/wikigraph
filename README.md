@@ -66,6 +66,6 @@ Assumptions
 * Least 2GB of RAM, since I have 2GB on my computer. Many things in this project would look different if I had more or less RAM on my laptop.
   At most 1.5GB is expected to be used by either redis or some programs from here.
 * Program is compiled and run as 32bit.
-* `pagelinks.sql` is exported with sorting `mysqldump --tables pagelinks --order-by-primary`
+* `pagelinks.sql` and `categorylinks.sql` are exported with sorting `mysqldump --order-by-primary`
 
 

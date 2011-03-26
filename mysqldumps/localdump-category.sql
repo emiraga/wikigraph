@@ -36,7 +36,6 @@ CREATE TABLE `categorylinks` (
 --
 -- Dumping data for table `categorylinks`
 --
--- ORDER BY:  `cl_from`,`cl_to`
 
 LOCK TABLES `categorylinks` WRITE;
 /*!40000 ALTER TABLE `categorylinks` DISABLE KEYS */;
@@ -53,4 +52,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2011-02-22  2:27:29
+-- Dump completed on 2011-02-22  1:23:37

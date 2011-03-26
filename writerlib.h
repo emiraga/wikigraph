@@ -80,30 +80,30 @@ private:
 	BufferedWriter *node_begin_list;
 	BufferedWriter *edge_list;
 	int cur_graphId;
-	vector<int> graphedges;
+	vector<unsigned int> graph_edges;
+	int num_edges, num_nodes;
 
 public:
-	GraphWriter()
+	GraphWriter(const char *node_fname, const char *edge_fname, int num_nodes)
+		: num_edges(0), cur_graphId(0), num_nodes(num_nodes)
 	{
-		node_begin_list = new BufferedWriter("graph_nodes.bin");
-		edge_list = new BufferedWriter("graph_edges.bin");
+		node_begin_list = new BufferedWriter(node_fname);
+		edge_list = new BufferedWriter(edge_fname);
+		node_begin_list->writeUint(0);
+		node_begin_list->writeUint(0); //node 1 starts with zero's edge
 	}
 	void close()
 	{
-
-		// Trick to force last nodes to be written
-		while(cur_graphId <= graphNodes + 1)
-			write_graphId(cur_graphId + 1);
-
 		if(node_begin_list)
 		{
+			// Trick to force last nodes to be written
+			while(cur_graphId <= num_nodes + 1)
+				write_node(cur_graphId + 1);
+
 			node_begin_list->close();
 			delete node_begin_list;
 			node_begin_list = NULL;
-		}
 
-		if(edge_list)
-		{
 			edge_list->close();
 			delete edge_list;
 			edge_list = NULL;
@@ -114,30 +114,30 @@ public:
 		close();
 	}
 
-	void write_graphId(int from_graphId)
+	void write_node(int from_graphId)
 	{
-		// Assert that pagelinks are exported with: mysqldump --order-by-primary
+		// Assert that tables are exported with: mysqldump --order-by-primary
 		assert(from_graphId >= cur_graphId);
 
 		if(from_graphId != cur_graphId)
 		{
-			for(int i=cur_graphId; i< from_graphId; i++)
+			for(size_t i=0;i<graph_edges.size();i++)
 			{
-				// For each node write the beginning of its edge list
-				node_begin_list->writeUint(num_edges);
+				edge_list->writeUint(graph_edges[i]);
+				printf("WE: %u\n", graph_edges[i]);
 			}
+			num_edges += graph_edges.size();
+			graph_edges.clear();
 
-			for(size_t i=0;i<graphedges.size();i++)
-			{
-				edge_list->writeUint(graphedges[i]);
-			}
-			num_edges += graphedges.size();
-			graphedges.clear();
-
-			cur_graphId = from_graphId;
+			node_begin_list->writeUint(num_edges);
+			cur_graphId++;
 		}
 	}
-		graphedges.push_back(to_graphId);
+
+	void write_edge(unsigned int to_graphId)
+	{
+		graph_edges.push_back(to_graphId);
+	}
 
 private:
 	GraphWriter(const GraphWriter&);

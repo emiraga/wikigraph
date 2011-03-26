@@ -17,7 +17,7 @@ bin/md5.o: md5.c md5.h
 	gcc $(cflags) -c md5.c 
 	mv md5.o bin/
 
-bin/generate_graph: generate_graph.cpp sqlparser.h config.h bin/md5.o
+bin/generate_graph: generate_graph.cpp writerlib.h sqlparser.h config.h bin/md5.o
 	mkdir -p bin
 	g++ $(cflags) $(largefile) generate_graph.cpp bin/md5.o $(redisobj) -lz -o bin/generate_graph
 
@@ -33,7 +33,7 @@ bin/md5_debug.o: md5.c md5.h
 	gcc $(cflags) -c md5.c 
 	mv md5.o bin/md5_debug.o
 
-bin/generate_graph_debug: generate_graph.cpp sqlparser.h config.h bin/md5_debug.o
+bin/generate_graph_debug: generate_graph.cpp writerlib.h sqlparser.h config.h bin/md5_debug.o
 	mkdir -p bin
 	g++ $(cflags) $(largefile) generate_graph.cpp bin/md5_debug.o $(redisobj) -lz -o bin/generate_graph_debug $(debugflags)
 
