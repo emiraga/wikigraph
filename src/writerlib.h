@@ -57,7 +57,7 @@ class BufferedWriter {
   }
 
   void flush() {
-    size_t res = file_->write(buffer_, 4, pos_);
+    size_t res = file_->write(buffer_, sizeof(uint32_t), pos_);
     assert(res == pos_);
     pos_ = 0;
   }
@@ -180,75 +180,6 @@ class BufferedReader {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(BufferedReader);
-};
-
-template<class FileWriter>
-class GraphWriter {
- public:
-  GraphWriter(FileWriter *f, int num_nodes)
-      : writer_(f), nodes_(num_nodes), cur_node_(0), file_pos_(0) {
-    size_t list_len = 2 * (num_nodes + 1);
-    list_ = new node_t[ list_len ];
-    memset(list_, -1, sizeof(node_t) * list_len);
-  }
-  ~GraphWriter() {
-    close();
-  }
-  // Tell the class that you are beginning to emit edges for a new node
-  void start_node(node_t node) {
-    assert(static_cast<int>(node) > 0);
-    assert(static_cast<int>(node) <= nodes_);
-    assert(node > cur_node_);  // Nodes must be given in increasing order
-    if (PREDICT_FALSE(cur_node_ != 0)) {
-      end(cur_node_) = file_pos_;
-    }
-    // each node should be written just once
-    // node zero is always un-initialized
-    assert(start(node) == start(0));
-    start(node) = file_pos_;
-    cur_node_ = node;
-  }
-  void add_edge(node_t edge) {
-    assert(static_cast<int>(edge) > 0);
-    assert(static_cast<int>(edge) <= nodes_);
-
-    assert(cur_node_ != 0);
-    writer_->write_uint(edge);
-    file_pos_++;
-  }
-  void close() {
-    if (writer_ == NULL)
-      return;
-    if (cur_node_ != 0) {
-      end(cur_node_) = file_pos_;
-    }
-    cur_node_ = 0;
-
-    int num_edges = file_pos_;
-    size_t list_len = 2 * (nodes_ + 1);
-    writer_->write(list_, 4, list_len);  // write list of nodes
-    writer_->write_uint(num_edges);  // to the end of file, number of edges
-    writer_->write_uint(nodes_);  // and number of nodes are added
-    writer_->close();
-    writer_ = NULL;
-  }
- private:
-  // Refers to beginning of edge list for each node
-  node_t& start(node_t node) {
-    return list_[2 * node];
-  }
-  // End of edge list
-  node_t& end(node_t node) {
-    return list_[2 * node + 1];
-  }
-
-  FileWriter *writer_;
-  int nodes_;  // number of nodes
-  node_t cur_node_;  // which node is currently active
-  int file_pos_;  // nodes/edges not bytes
-  node_t *list_;  // beginning and end of edge list for each node
- private:
-  DISALLOW_COPY_AND_ASSIGN(GraphWriter);
 };
 
 }  // namespace wikigraph

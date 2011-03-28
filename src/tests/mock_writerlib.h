@@ -26,13 +26,6 @@ class MockBufferedWriter {
   MOCK_METHOD3(write, size_t(const void *ptr, size_t size, size_t nmemb));
 };
 
-class MockGraphWriter {
- public:
-  MOCK_METHOD1(start_node, void(node_t node));
-  MOCK_METHOD1(add_edge, void(node_t edge));
-  MOCK_METHOD0(close, void());
-};
-
 class StubFileSystem {
  public:
   uint32_t *data_;
