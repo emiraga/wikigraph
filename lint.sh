@@ -7,6 +7,7 @@ if [ -z $1 ]; then
       egrep -v "^$maindir/src/gtest/" | 
       egrep -v "^$maindir/src/hiredis/" | 
       egrep -v "^$maindir/src/gmock/" |
+      egrep -v "^$maindir/src/md5/" |
       cat`
 else
     files=$*

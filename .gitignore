@@ -2,6 +2,7 @@ xmldumps
 mysqldumps/enwiki*
 *.pyc
 *.o
+*.graph
 *.bin
 bin/
 *.swp
@@ -11,5 +12,6 @@ CMakeFiles
 cmake_install.cmake
 Makefile
 run_tests
+gen_graph
 debug.sh
 core

@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "wikigraph-stubs-internal.h"
+#include "wikigraph_stubs_internal.h"
 
 namespace wikigraph {
 
@@ -48,12 +48,14 @@ class GraphWriter {
     memset(list_, 0, sizeof(node_t) * list_len);
   }
   ~GraphWriter() {
-    close();
+    finish();
   }
   // Tell the class that you are beginning to emit edges for a new node
   void start_node(node_t node) {
     assert(node > 0);
     assert(node <= nodes_);
+    if (node == cur_node_)
+      return;
     assert(node > cur_node_);  // Nodes must be given in increasing order
     while (PREDICT_FALSE(++cur_node_ < node)) {
       start(cur_node_) = file_pos_;
@@ -77,7 +79,7 @@ class GraphWriter {
       file_pos_++;
     }
   }
-  void close() {
+  void finish() {
     if (writer_ == NULL)
       return;
 
@@ -91,7 +93,7 @@ class GraphWriter {
     writer_->write(list_, 4, list_len);  // write list of nodes
     writer_->write_uint(num_edges);  // to the end of file, number of edges
     writer_->write_uint(nodes_);  // and number of nodes are added
-    writer_->close();
+
     writer_ = NULL;
   }
  private:
@@ -220,15 +222,7 @@ class AddGraphs {
   :graph1_(g1), graph2_(g2), writer_(writer) {
     assert(graph1_ != graph2_);
   }
-  ~AddGraphs() {
-    close();
-  }
-  void close() {
-    if (writer_ == NULL)
-      return;
-    writer_->close();
-    writer_ = NULL;
-  }
+  ~AddGraphs() { }
   void run() {
     NodeStream node1, node2;
     bool valid1 = false, valid2 = false;

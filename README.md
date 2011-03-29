@@ -45,9 +45,18 @@ To do analysis of real wikipedia database, download dumps from [english wikipedi
 
 Edit `config.h` and compile binaries
     make
+
 Start redis server, preferably with unix socket `/tmp/redis.sock`. Generating graph is database-intensive operation, and unix socket will speed things up a bit. 
 
-You can disabled automated background saves, (comment out `save` lines from `redis.conf`) they can be annoying. `BGSAVE` will be called after graph has been generated.
+You can disabled automated background saves, (comment out `save` lines from `redis.conf`) they can be annoying. Command `SAVE` will be issued after graph has been generated.
+
+These are relevant bits from `redis.conf`
+
+    unixsocket /tmp/redis.conf
+    #comment out saves
+    #save 900 1
+    #save 300 10
+    #save 60 10000
 
 On a single machine first generate `graph*.bin`
     bin/generate_graph

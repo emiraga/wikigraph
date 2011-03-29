@@ -4,7 +4,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "graph.h"
-#include "tests/mock_writerlib.h"
+#include "tests/mock_file_io.h"
 #include "tests/mock_graph.h"
 
 using ::testing::_;
@@ -60,7 +60,7 @@ TEST(StreamGraphReader, using_fs_stub) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs(data, 10);
+  StubFileSystem fs(data, sizeof(data));
   BufferedReader<StubFileSystem, uint32_t> b(&fs);
   NodeStream node;
   StreamGraphReader<BufferedReader<StubFileSystem, uint32_t> > g(&b);
@@ -107,7 +107,7 @@ TEST(GraphWriter, basic) {
     .Times(1);                             // node list 3 nodes
   EXPECT_CALL(b, write_uint(4)).Times(1);  // num edges
   EXPECT_CALL(b, write_uint(3)).Times(1);  // num nodes
-  EXPECT_CALL(b, close()).Times(AtLeast(1));
+  // EXPECT_CALL(b, close()).Times(AtLeast(1));
 
   GraphWriter<MockBufferedWriter> g(&b, 3);
   g.start_node(1);
@@ -145,7 +145,7 @@ TEST(GraphWriter, WithHole) {
     .Times(1);                             // node list 5 nodes
   EXPECT_CALL(b, write_uint(2)).Times(1);  // num edges
   EXPECT_CALL(b, write_uint(8)).Times(1);  // num nodes
-  EXPECT_CALL(b, close()).Times(AtLeast(1));
+  // EXPECT_CALL(b, close()).Times(AtLeast(1));
 
   GraphWriter<MockBufferedWriter> g(&b, 8);
   g.start_node(2);
@@ -167,8 +167,8 @@ TEST(AddGraphs, using_fs_stub) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs1(data, 10);
-  StubFileSystem fs2(data, 10);
+  StubFileSystem fs1(data, sizeof(data));
+  StubFileSystem fs2(data, sizeof(data));
   BufferedReader<StubFileSystem, uint32_t> b1(&fs1);
   BufferedReader<StubFileSystem, uint32_t> b2(&fs2);
 
@@ -191,13 +191,12 @@ TEST(AddGraphs, using_fs_stub) {
 
   EXPECT_CALL(wr, write_uint(6)).Times(1);  // edges
   EXPECT_CALL(wr, write_uint(3)).Times(1);  // nodes
-  EXPECT_CALL(wr, close()).Times(1);
+  // EXPECT_CALL(wr, close()).Times(1);
   AddGraphs<StubGraphReader, GraphWriter<MockBufferedWriter> >
     add(&g1, &g2, &grwr);
   g1.init();
   g2.init();
   add.run();
-  add.close();
 }
 
 /* TransposeGraphPartially */
@@ -213,7 +212,7 @@ TEST(TransposeGraphPartially, simple1) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs(data, 10);
+  StubFileSystem fs(data, sizeof(data));
   BufferedReader<StubFileSystem, uint32_t> b(&fs);
   StubGraphReader g(&b);
   g.init();
@@ -240,7 +239,7 @@ TEST(TransposeGraphPartially, simple2) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs(data, 10);
+  StubFileSystem fs(data, sizeof(data));
   BufferedReader<StubFileSystem, uint32_t> b(&fs);
   StubGraphReader g(&b);
   g.init();
