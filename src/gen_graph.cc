@@ -19,8 +19,13 @@ enum WikiNamespaces {
   NS_CATEGORY = 14,
 };
 
+// Types for reading to regular and gzipped file
 typedef BufferedReader<SystemFile, char> CharReader;
 typedef BufferedReader<GzipFile, char> CharGzipReader;
+typedef BufferedReader<SystemFile, uint32_t> Int32Reader;
+typedef StreamGraphReader<Int32Reader> GraphSystemReader;
+
+// Types for writing to regular file 
 typedef BufferedWriter<SystemFile> SystemWriter;
 typedef GraphWriter<SystemWriter> GraphSystemWriter;
 
@@ -56,11 +61,13 @@ struct WikiGraphInfo {
   int art_redirect_count, cat_redirect_count;
   int article_links_count, pagelink_rows_count;
   int skipped_catlinks, skipped_fromcat_links;
+  int category_links_count;
 } g_info;
 
 }  // namespace
 
 // Hiding this Ugly syntax with define
+// for some reason redisCommand does not return redisReply*
 #define RE_(x) reinterpret_cast<redisReply*>(x)
 
 /**************
@@ -180,7 +187,7 @@ void DataHandler::data(const vector<string> &data) {
 
   redisReply *reply;
 
-  int graphId;
+  int graphId = -1;
   if (is_redir) {
     reply = RE_(redisCommand(redis_,
         "SETNX %s%s w:%d", prefix, hash.get_hash(), wikiId));
@@ -216,6 +223,10 @@ void DataHandler::data(const vector<string> &data) {
   } else {
     g_wikistatus[wikiId].type = WikiStatus::REGULAR;
     g_wikigraphId[wikiId] = graphId;
+
+    if((graphId % (1024*4)) == 0) {
+      printf(" %d\n", graphId);
+    }
   }
   return;
 }  // DataHandler::data
@@ -424,8 +435,8 @@ void DataHandler::data(const vector<string> &data) {
   int wikiId = atoi(data[pl_from].c_str());
 
   // Check if this page exists and is regular (not redirect)
-  if (g_wikistatus[wikiId].type != 1)  // If it is not regular page skip it
-    return;
+  if (g_wikistatus[wikiId].type != WikiStatus::REGULAR)
+    return;  // If it is not regular page skip it
   if (g_wikistatus[wikiId].is_category) {
     g_info.skipped_fromcat_links++;
     return;  // Skip links from categories
@@ -470,13 +481,11 @@ void DataHandler::data(const vector<string> &data) {
 
 }  // namespace stage3
 
-
 /**************
  * STAGE 4
+ * Genereate _forward_ edges in category inclusion links
  */
 namespace stage4 {
-
-int catlinks;
 
 class DataHandler {
   // SQL schema
@@ -494,7 +503,7 @@ class DataHandler {
   explicit DataHandler(redisContext *redis)
   :redis_(redis) { }
   void init() {
-    file_.open("catlinks.graph", "wb");
+    file_.open("catlinks_fw.graph", "wb");
     buff_writer_ = new SystemWriter(&file_);
     graph_ = new GraphSystemWriter(buff_writer_, g_info.graph_nodes_count);
   }
@@ -509,7 +518,7 @@ class DataHandler {
 };
 
 void main_stage4(redisContext *redis) {
-  catlinks = 0;
+  g_info.category_links_count = 0;
   DataHandler data_handler(redis);
   data_handler.init();
 
@@ -534,7 +543,8 @@ void main_stage4(redisContext *redis) {
   }
 
   redisReply *reply;
-  reply = RE_(redisCommand(redis, "SET s:count:Category_links %d", catlinks));
+  reply = RE_(redisCommand(redis,
+        "SET s:count:Category_links %d", g_info.category_links_count));
   freeReplyObject(reply);
 }
 
@@ -564,22 +574,95 @@ void DataHandler::data(const vector<string> &data) {
     from_graphId, wikiId, prefix, title, to_graphId,
     g_wikistatus[to_graphId].type);
 #endif
+    g_info.category_links_count++;
 
     graph_->add_edge(to_graphId);
+  } else {
+    freeReplyObject(reply);
   }
-  freeReplyObject(reply);
-}
+}  // DataHandler::data
 
 }  // namespace stage4
+
+/**************
+ * STAGE 5
+ * Transpose _forward_ edges into _backwards_
+ * for category inclusion links.
+ */
+namespace stage5 {
+
+void main_stage5() {
+  // Setup output graph
+  SystemFile f_out;
+  f_out.open("catlinks_bw.graph","wb");
+  SystemWriter writer(&f_out);
+  GraphSystemWriter graph_out(&writer, g_info.graph_nodes_count);
+  // NODES_PER_PASS: How much nodes to process in one pass
+
+  node_t nodes = 0;
+  node_t last_node = static_cast<node_t>(g_info.graph_nodes_count);
+  for(int pass = 1; nodes < last_node; pass++) {
+    // Open graph with forward links
+    SystemFile f_in;
+    f_in.open("catlinks_fw.graph", "rb");
+    Int32Reader reader(&f_in);
+    GraphSystemReader graph_in(&reader);
+    graph_in.init();
+
+    printf("Pass %d ...\n", pass);
+
+    TransposeGraphPartially<GraphSystemReader, GraphSystemWriter>
+      transpose(&graph_in, nodes+1, nodes+NODES_PER_PASS, &graph_out);
+    transpose.run();
+
+    nodes += NODES_PER_PASS;  // Progress to next pass
+  }
+}
+
+}  // namespace stage5
+
+/**************
+ * STAGE 6
+ * Merge graph with _forward_ and graph with _backward_
+ * edges into a single one.
+ */
+namespace stage6 {
+
+void main_stage6() {
+  // Setup output graph
+  SystemFile f_out;
+  f_out.open("catlinks.graph","wb");
+  SystemWriter writer(&f_out);
+  GraphSystemWriter graph_out(&writer, g_info.graph_nodes_count);
+
+  // Open graph with forward links
+  SystemFile f_in1;
+  f_in1.open("catlinks_fw.graph", "rb");
+  Int32Reader reader1(&f_in1);
+  GraphSystemReader graph_in1(&reader1);
+  graph_in1.init();
+
+  // Open graph with backward links
+  SystemFile f_in2;
+  f_in2.open("catlinks_bw.graph", "rb");
+  Int32Reader reader(&f_in2);
+  GraphSystemReader graph_in2(&reader2);
+  graph_in2.init();
+
+  AddGraphs<GraphSystemReader, GraphSystemWriter> 
+    merge(&graph_in1, &graph_in2, &graph_out);
+  merge.run();
+  printf("You can delete 'catlinks_fw.graph' and 'catlinks_bw.graph'.\n");
+}
+
+}  // namespace stage6
 
 }  // namespace wikigraph
 
 int main(int argc, char *argv[]) {
-  redisContext *redis;
+  redisContext *redis = NULL;
 #ifdef REDIS_UNIXSOCKET
   redis = redisConnectUnix(REDIS_UNIXSOCKET);
-#else
-  redis = NULL;
 #endif
 
   if (redis == NULL || redis->err) {
@@ -597,17 +680,24 @@ int main(int argc, char *argv[]) {
   reply = RE_(redisCommand(redis, "SELECT %d", REDIS_DATABASE));
   freeReplyObject(reply);
 
-  printf("Starting stage 1\n");
+  // Run though stages
+  printf("Starting stage 1 (pages)\n");
   wikigraph::stage1::main_stage1(redis);
 
-  printf("Starting stage 2\n");
+  printf("Starting stage 2 (redirects)\n");
   wikigraph::stage2::main_stage2(redis);
 
-  printf("Starting stage 3\n");
+  printf("Starting stage 3 (article links)\n");
   wikigraph::stage3::main_stage3(redis);
 
-  printf("Starting stage 4\n");
+  printf("Starting stage 4 (category inclusions)\n");
   wikigraph::stage4::main_stage4(redis);
+
+  printf("Starting stage 5 (transpose graph)\n");
+  wikigraph::stage5::main_stage5();
+
+  printf("Starting stage 6 (merge fw and bw edges)\n");
+  wikigraph::stage6::main_stage6();
 
   // Save database to disk
   reply = RE_(redisCommand(redis, "SAVE"));

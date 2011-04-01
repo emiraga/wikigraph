@@ -84,7 +84,33 @@ Assumptions
 -----------
 * Least 1.5GB of RAM, since I have that much on my computer. Many things in this project would look different if I had more or less RAM on my computer.
   At most 1.0GB is expected to be used by either redis or some programs from here.
-* Program is compiled and run as 32bit (Maybe 64bit works as well, I did not try).
+* Program is compiled and run as 32bit (Maybe 64bit works as well, I did not try it myself).
 * `pagelinks.sql` and `categorylinks.sql` are exported with sorting `mysqldump --order-by-primary`
+
+
+Redis keys
+----------
+
+Names of articles and categories are hashed. Hash values are used to 
+refer and search for page names and make links.
+
+Keys `a:<hash>` store number **graphId** which is used in
+wikigraph to identify nodes (articles and categories).
+
+Keys `a:<hash>` also can hold `w:<wikiId>` which means that name is redirect
+and **wikiId** is used in wikipedia database. 
+
+We map **wikiId** to our own **graphId**. 
+Relevant: `g_wikigraphId[wikiId] = graphId;`
+**wikiId** is only used during generation of graph. In processing stage,
+nodes are refered to using **graphId**.
+
+Keys `c:*` are similar as `a:*`. Former is used for categories and latter for
+articles.
+
+Keys `w:<wikiId>` keep the values `a:<hash>` or `c:<hash>`. This is used for
+reverse lookup of hashes based on **wikiId**.
+
+Keys `s:*` store statistical data.
 
 

@@ -324,8 +324,12 @@ class TransposeGraphPartially {
     }
     // Write out the partial graph
     for (node_t node = start_; node <= end_; node++) {
+      int i = first_[node - start_];
+      if (i == -1)
+        continue;  // Empty list
+
       writer_->start_node(node);
-      for (int i = first_[node - start_]; i != -1; i = link_list_[i].next) {
+      for (; i != -1; i = link_list_[i].next) {
         writer_->add_edge(link_list_[i].node);
       }
     }

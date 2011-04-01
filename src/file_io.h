@@ -20,7 +20,13 @@ class SystemFile {
   SystemFile() { }
   bool open(const char *path, const char *mode) {
     f_ = ::fopen(path, mode);
-    return f_ != NULL;
+    if (!f_)
+      return false;
+    // Determine file size (used in get_progress)
+    ::fseeko(f_, 0, SEEK_END);
+    file_size_ = ::ftello(f_);
+    ::fseeko(f_, 0, SEEK_SET);
+    return true;
   }
   size_t write(const void *ptr, size_t size, size_t nmemb) {
     return ::fwrite(ptr, size, nmemb, f_);
@@ -40,8 +46,13 @@ class SystemFile {
   int eof() {
     return ::feof(f_);
   }
+  // Only useful when reading files
+  double get_progress() {
+    return 100.0 * tell() / file_size_;
+  }
  private:
   FILE *f_;
+  off_t file_size_;
   DISALLOW_COPY_AND_ASSIGN(SystemFile);
 };
 

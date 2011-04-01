@@ -219,7 +219,6 @@ TEST(TransposeGraphPartially, simple1) {
 
   InSequence seq;
   MockGraphWriter grwr;
-  EXPECT_CALL(grwr, start_node(2)).Times(1);  // Node 2
   EXPECT_CALL(grwr, start_node(3)).Times(1);  // Node 3
   EXPECT_CALL(grwr, add_edge(2)).Times(1);
 
