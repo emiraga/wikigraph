@@ -6,6 +6,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <zlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <numeric>
 
@@ -15,7 +19,21 @@ namespace wikigraph {
 
 const unsigned int kBufferSize = 1024*1024;  // for buffered reader and writer
 
-class SystemFile {
+class File {
+ public:
+  virtual ~File() { }
+  virtual bool open(const char *path, const char *mode) = 0;
+  virtual size_t write(const void *ptr, size_t size, size_t nmemb) = 0;
+  virtual size_t read(void *ptr, size_t size, size_t nmemb) = 0;
+  virtual int close() = 0;
+  virtual off_t tell() = 0;
+  virtual int seek(off_t offset, int whence) = 0;
+  virtual int eof() = 0;
+  // Only useful when reading files
+  virtual double get_progress() = 0;
+};
+
+class SystemFile : public File {
  public:
   SystemFile() { }
   bool open(const char *path, const char *mode) {
@@ -56,9 +74,65 @@ class SystemFile {
   DISALLOW_COPY_AND_ASSIGN(SystemFile);
 };
 
-// Write data to the file
-template<class File>
-class BufferedWriter {
+class GzipFile : public File {
+ public:
+  GzipFile() { }
+  bool open(const char *path, const char *mode) {
+    f_plain_ = fopen(path, mode);
+    if (!f_plain_)
+      return false;
+    // Determine file size (used in get_progress)
+    struct stat file_info;
+    fstat(fileno(f_plain_), &file_info);
+    file_size_ = file_info.st_size;
+    // Open az gzip
+    f_ = ::gzdopen(fileno(f_plain_), mode);
+    return f_ != Z_NULL;
+  }
+  size_t write(const void *ptr, size_t size, size_t nmemb) {
+    assert(false);  // not interested in writing gz files
+    // return ::gzwrite(f_, ptr, size * nmemb);
+  }
+  size_t read(void *ptr, size_t size, size_t nmemb) {
+    return ::gzread(f_, ptr, size * nmemb);
+  }
+  int close() {
+    return ::gzclose(f_);
+  }
+  off_t tell() {
+    return ::gztell(f_);
+  }
+  int seek(off_t offset, int whence) {
+    assert(whence != SEEK_END);  // per gzseek man page
+    return ::gzseek(f_, offset, whence);
+  }
+  int eof() {
+    return ::gzeof(f_);
+  }
+  // Only useful when reading files
+  double get_progress() {
+    // To obtain current position in a file, we query file pointer
+    // of the compressed file. There are many problems with this:
+    // mainly, is that it is not very precise, and potentially not portable.
+    return 100.0 * lseek(fileno(f_plain_), 0, SEEK_CUR) / file_size_;
+  }
+ private:
+  gzFile f_;
+  FILE *f_plain_;
+  off_t file_size_;
+  DISALLOW_COPY_AND_ASSIGN(GzipFile);
+};
+
+class FileWriter {
+ public:
+  virtual ~FileWriter() { }
+  virtual void finish() = 0;
+  virtual void write_uint(uint32_t val) = 0;
+  virtual void write_bit(bool val) = 0;
+  virtual size_t write(const void *ptr, size_t size, size_t nmemb) = 0;
+};
+
+class BufferedWriter : public FileWriter {
  public:
   explicit BufferedWriter(File *f)
       :file_(f), pos_(0), bitpos_(0) { }
@@ -124,9 +198,18 @@ class BufferedWriter {
   DISALLOW_COPY_AND_ASSIGN(BufferedWriter);
 };
 
-// Read data in units from file
-template<class File, class UnitType>
-class BufferedReader {
+template<class UnitType>
+class FileReader {
+ public:
+  virtual ~FileReader() { }
+  virtual bool eof() const = 0;
+  virtual UnitType read_unit() = 0;
+  virtual UnitType peek_unit() = 0;
+  virtual void read_from_back(UnitType *ptr, size_t nmemb) = 0;
+};
+
+template<class UnitType>
+class BufferedReader : public FileReader<UnitType> {
  public:
   explicit BufferedReader(File *f)
       :file_(f), read_size_(0), index_(0) { }

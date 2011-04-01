@@ -3,38 +3,55 @@
 #ifndef SRC_TESTS_MOCK_FILE_IO_H_
 #define SRC_TESTS_MOCK_FILE_IO_H_
 
-#include "file_io.h"
 #include "gmock/gmock.h"
+#include "file_io.h"
 
 namespace wikigraph {
 
-class MockSystemFile {
+class MockFile : public File {
  public:
-  MOCK_METHOD2(open,  bool(const char *path, const char *mode));
+  MOCK_METHOD2(open, bool(const char *path, const char *mode));
   MOCK_METHOD3(write, size_t(const void *ptr, size_t size, size_t nmemb));
-  MOCK_METHOD3(read,  size_t(void *ptr, size_t size, size_t nmemb));
+  MOCK_METHOD3(read, size_t(void *ptr, size_t size, size_t nmemb));
   MOCK_METHOD0(close, int());
+  MOCK_METHOD0(tell, off_t());
+  MOCK_METHOD2(seek, int(off_t offset, int whence));
   MOCK_METHOD0(eof, int());
+  MOCK_METHOD0(get_progress, double());
 };
 
-class MockBufferedWriter {
+class MockFileWriter : public FileWriter {
  public:
-  MOCK_METHOD0(flush, void());
-  MOCK_METHOD0(close, void());
+  MOCK_METHOD0(finish, void());
   MOCK_METHOD1(write_uint, void(uint32_t val));
   MOCK_METHOD1(write_bit, void(bool val));
   MOCK_METHOD3(write, size_t(const void *ptr, size_t size, size_t nmemb));
 };
 
-class StubFileSystem {
+template<class UnitType>
+class MockFileReader : public FileReader<UnitType> {
+ public:
+  MOCK_CONST_METHOD0_T(eof, bool());
+  MOCK_METHOD0_T(read_unit, UnitType());
+  MOCK_METHOD0_T(peek_unit, UnitType());
+  MOCK_METHOD2_T(read_from_back, void(UnitType *ptr, size_t nmemb));
+};
+
+class StubFile : public File {
  public:
   char *data_;
   off_t size_;
   off_t pos_;
 
-  StubFileSystem(void *data, size_t len)
+  StubFile(void *data, size_t len)
   : data_(reinterpret_cast<char*>(data)), size_(len), pos_(0) { }
 
+  bool open(const char *path, const char *mode) {
+    assert(false);
+  }
+  size_t write(const void *ptr, size_t size, size_t nmemb) {
+    assert(false);
+  }
   int seek(off_t off, int whence) {
     if (whence == SEEK_CUR) pos_ += off;
     else if (whence == SEEK_SET) pos_ = off;
@@ -56,14 +73,18 @@ class StubFileSystem {
     }
     return ret;
   }
-  void close() {
+  int close() {
     data_ = NULL;
+    return 0;
   }
-  size_t tell() {
+  off_t tell() {
     return pos_;
   }
-  bool eof() const {
+  int eof() {
     return pos_ >= size_;
+  }
+  double get_progress() {
+    return 100 * pos_ / size_;
   }
 };
 

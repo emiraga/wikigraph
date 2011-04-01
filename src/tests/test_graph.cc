@@ -15,9 +15,6 @@ using ::testing::InSequence;
 
 namespace wikigraph {
 
-typedef StreamGraphReader<BufferedReader<StubFileSystem,
-  uint32_t> > StubGraphReader;
-
 TEST(BitArray, basic) {
   const int s = 10;
   BitArray b(s);
@@ -60,10 +57,10 @@ TEST(StreamGraphReader, using_fs_stub) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs(data, sizeof(data));
-  BufferedReader<StubFileSystem, uint32_t> b(&fs);
+  StubFile fs(data, sizeof(data));
+  BufferedReader<uint32_t> b(&fs);
   NodeStream node;
-  StreamGraphReader<BufferedReader<StubFileSystem, uint32_t> > g(&b);
+  StreamGraphReader g(&b);
   g.init();
 
   ASSERT_TRUE(g.has_next());
@@ -97,7 +94,7 @@ bool GraphBasicMatch(const void *p) {
 
 TEST(GraphWriter, basic) {
   InSequence seq;
-  MockBufferedWriter b;
+  MockFileWriter b;
 
   EXPECT_CALL(b, write_uint(2)).Times(1);  // edge for node 1
   EXPECT_CALL(b, write_uint(1)).Times(1);  // edge for node 2
@@ -109,7 +106,7 @@ TEST(GraphWriter, basic) {
   EXPECT_CALL(b, write_uint(3)).Times(1);  // num nodes
   // EXPECT_CALL(b, close()).Times(AtLeast(1));
 
-  GraphWriter<MockBufferedWriter> g(&b, 3);
+  GraphBuffWriter g(&b, 3);
   g.start_node(1);
   g.add_edge(2);
   g.start_node(2);
@@ -137,7 +134,7 @@ bool GraphWithHoleMatch(const void *p) {
 
 TEST(GraphWriter, WithHole) {
   InSequence seq;
-  MockBufferedWriter b;
+  MockFileWriter b;
 
   EXPECT_CALL(b, write_uint(1)).Times(1);  // edge for node 2
   EXPECT_CALL(b, write_uint(3)).Times(1);  // edge for node 5
@@ -147,7 +144,7 @@ TEST(GraphWriter, WithHole) {
   EXPECT_CALL(b, write_uint(8)).Times(1);  // num nodes
   // EXPECT_CALL(b, close()).Times(AtLeast(1));
 
-  GraphWriter<MockBufferedWriter> g(&b, 8);
+  GraphBuffWriter g(&b, 8);
   g.start_node(2);
   g.add_edge(1);
   g.start_node(5);
@@ -167,16 +164,16 @@ TEST(AddGraphs, using_fs_stub) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs1(data, sizeof(data));
-  StubFileSystem fs2(data, sizeof(data));
-  BufferedReader<StubFileSystem, uint32_t> b1(&fs1);
-  BufferedReader<StubFileSystem, uint32_t> b2(&fs2);
+  StubFile fs1(data, sizeof(data));
+  StubFile fs2(data, sizeof(data));
+  BufferedReader<uint32_t> b1(&fs1);
+  BufferedReader<uint32_t> b2(&fs2);
 
-  StubGraphReader g1(&b1);
-  StubGraphReader g2(&b2);
+  StreamGraphReader g1(&b1);
+  StreamGraphReader g2(&b2);
 
-  MockBufferedWriter wr;
-  GraphWriter<MockBufferedWriter> grwr(&wr, 3);
+  MockFileWriter wr;
+  GraphBuffWriter grwr(&wr, 3);
 
   InSequence seq;
   EXPECT_CALL(wr, write_uint(1)).Times(1);  // Node 2
@@ -192,8 +189,7 @@ TEST(AddGraphs, using_fs_stub) {
   EXPECT_CALL(wr, write_uint(6)).Times(1);  // edges
   EXPECT_CALL(wr, write_uint(3)).Times(1);  // nodes
   // EXPECT_CALL(wr, close()).Times(1);
-  AddGraphs<StubGraphReader, GraphWriter<MockBufferedWriter> >
-    add(&g1, &g2, &grwr);
+  AddGraphs add(&g1, &g2, &grwr);
   g1.init();
   g2.init();
   add.run();
@@ -212,9 +208,9 @@ TEST(TransposeGraphPartially, simple1) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs(data, sizeof(data));
-  BufferedReader<StubFileSystem, uint32_t> b(&fs);
-  StubGraphReader g(&b);
+  StubFile fs(data, sizeof(data));
+  BufferedReader<uint32_t> b(&fs);
+  StreamGraphReader g(&b);
   g.init();
 
   InSequence seq;
@@ -222,8 +218,7 @@ TEST(TransposeGraphPartially, simple1) {
   EXPECT_CALL(grwr, start_node(3)).Times(1);  // Node 3
   EXPECT_CALL(grwr, add_edge(2)).Times(1);
 
-  TransposeGraphPartially<StubGraphReader, MockGraphWriter>
-    trans(&g, 2, 3, &grwr);
+  TransposeGraphPartially trans(&g, 2, 3, &grwr);
   trans.run();
 }
 
@@ -238,9 +233,9 @@ TEST(TransposeGraphPartially, simple2) {
     3,  // extra
     3, 3,
   };
-  StubFileSystem fs(data, sizeof(data));
-  BufferedReader<StubFileSystem, uint32_t> b(&fs);
-  StubGraphReader g(&b);
+  StubFile fs(data, sizeof(data));
+  BufferedReader<uint32_t> b(&fs);
+  StreamGraphReader g(&b);
   g.init();
 
   // Not in sequence
@@ -249,8 +244,7 @@ TEST(TransposeGraphPartially, simple2) {
   EXPECT_CALL(grwr, add_edge(3)).Times(1);
   EXPECT_CALL(grwr, add_edge(2)).Times(1);
 
-  TransposeGraphPartially<StubGraphReader, MockGraphWriter>
-    trans(&g, 1, 1, &grwr);
+  TransposeGraphPartially trans(&g, 1, 1, &grwr);
   trans.run();
 }
 

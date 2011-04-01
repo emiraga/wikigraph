@@ -18,36 +18,33 @@ namespace wikigraph {
 /* BufferedWriter */
 
 TEST(BufferedWriter, empty) {
-  MockSystemFile s;
-  // EXPECT_CALL(s, close()).Times(AtLeast(1));
-  BufferedWriter<MockSystemFile> b(&s);
+  MockFile s;
+  BufferedWriter b(&s);
 }
 
 TEST(BufferedWriter, uint) {
   InSequence seq;
-  MockSystemFile s;
+  MockFile s;
   EXPECT_CALL(s, write(_, 4, 1)).Times(1).WillOnce(Return(1));
-  // EXPECT_CALL(s, close()).Times(AtLeast(1));
-  BufferedWriter<MockSystemFile> b(&s);
+  BufferedWriter b(&s);
   b.write_uint(45);
 }
 
 TEST(BufferedWriter, uint_buf2) {
   InSequence seq;
-  MockSystemFile s;
+  MockFile s;
   EXPECT_CALL(s, write(_, 4, kBufferSize)).Times(2)
     .WillRepeatedly(Return(kBufferSize));
-  // EXPECT_CALL(s, close()).Times(AtLeast(1));
-  BufferedWriter<MockSystemFile> b(&s);
+  BufferedWriter b(&s);
   for (uint32_t i = 0; i < 2*kBufferSize; i++)
     b.write_uint(i*1234);
 }
 
 TEST(BufferedWriter, write_bit) {
   InSequence seq;
-  MockSystemFile s;
+  MockFile s;
   EXPECT_CALL(s, write(_, 4, 1)).Times(1).WillOnce(Return(1));
-  BufferedWriter<MockSystemFile> b(&s);
+  BufferedWriter b(&s);
   b.write_bit(true);
   b.write_bit(false);
 }
@@ -55,9 +52,8 @@ TEST(BufferedWriter, write_bit) {
 /* BufferedReader */
 
 TEST(TestBufferedReader, empty) {
-  MockSystemFile s;
-  // EXPECT_CALL(s, close()).Times(AtLeast(1));
-  BufferedReader<MockSystemFile, uint32_t> b(&s);
+  MockFile s;
+  BufferedReader<uint32_t> b(&s);
 }
 
 size_t ReadAction1(void *buff, size_t sz, size_t nmemb) {
@@ -70,10 +66,9 @@ size_t ReadAction1(void *buff, size_t sz, size_t nmemb) {
 
 TEST(TestBufferedReader, read1) {
   InSequence seq;
-  MockSystemFile s;
+  MockFile s;
   EXPECT_CALL(s, read(_, 4, Gt(3u))).Times(1).WillOnce(Invoke(ReadAction1));
-  // EXPECT_CALL(s, close()).Times(AtLeast(1));
-  BufferedReader<MockSystemFile, uint32_t> b(&s);
+  BufferedReader<uint32_t> b(&s);
   ASSERT_EQ(23u, b.peek_unit());
   ASSERT_EQ(23u, b.read_unit());
   ASSERT_EQ(24u, b.read_unit());
@@ -91,12 +86,11 @@ size_t ReadAction2(void *buff, size_t size, size_t nmemb) {
 
 TEST(TestBufferedReader, read2) {
   InSequence seq;
-  MockSystemFile s;
+  MockFile s;
   EXPECT_CALL(s, read(_, 4, kBufferSize))
     .Times(2).WillRepeatedly(Invoke(ReadAction2));
-  // EXPECT_CALL(s, close()).Times(AtLeast(1));
 
-  BufferedReader<MockSystemFile, uint32_t> b(&s);
+  BufferedReader<uint32_t> b(&s);
   for (size_t i = 0; i < 2*kBufferSize; i++) {
     ASSERT_EQ(i % kBufferSize, b.peek_unit() );
     ASSERT_EQ(i % kBufferSize, b.read_unit() );
@@ -105,8 +99,8 @@ TEST(TestBufferedReader, read2) {
 
 TEST(TestBufferedReader, using_stub) {
   uint32_t data[5] = {1, 2, 3, 4, 5};
-  StubFileSystem fs(data, sizeof(data));
-  BufferedReader<StubFileSystem, uint32_t> b(&fs);
+  StubFile fs(data, sizeof(data));
+  BufferedReader<uint32_t> b(&fs);
   ASSERT_EQ(1u, b.peek_unit());
   uint32_t tmp[2];
   b.read_from_back(tmp, 2);
@@ -117,6 +111,53 @@ TEST(TestBufferedReader, using_stub) {
   b.read_from_back(tmp, 1);
   ASSERT_EQ(tmp[0], 5u);
   ASSERT_EQ(3u, b.read_unit());
+}
+
+TEST(GzipFile, simple) {
+  GzipFile f;
+  f.open("src/tests/0123456789.gz", "rb");
+  char tmp[15];
+  f.read(tmp, 1, 2);
+  ASSERT_EQ('0', tmp[0]);
+  ASSERT_EQ('1', tmp[1]);
+  ASSERT_EQ(false, f.eof());
+  memset(tmp, 0, 15);
+  f.read(tmp, 1, 10);
+  ASSERT_STREQ("23456789", tmp);
+  ASSERT_EQ(true, f.eof());
+  f.close();
+}
+
+TEST(GzipFile, seek_tell) {
+  GzipFile f;
+  f.open("src/tests/0123456789.gz", "rb");
+  char tmp[15];
+  f.read(tmp, 2, 1);
+  ASSERT_EQ('0', tmp[0]);
+  ASSERT_EQ('1', tmp[1]);
+  ASSERT_EQ(false, f.eof());
+  ASSERT_EQ(2, f.tell());
+
+  f.seek(3, SEEK_SET);
+  ASSERT_EQ(3, f.tell());
+
+  f.read(tmp, 2, 1);
+  ASSERT_EQ('3', tmp[0]);
+  ASSERT_EQ('4', tmp[1]);
+  ASSERT_EQ(false, f.eof());
+  ASSERT_EQ(5, f.tell());
+
+  f.seek(-3, SEEK_CUR);
+  f.read(tmp, 1, 1);
+  ASSERT_EQ('2', tmp[0]);
+
+  // SEEK_END is not supported wtf?
+  //
+  // f.seek(-2, SEEK_END);
+  // f.read(tmp, 2, 1);
+  // ASSERT_EQ('8', tmp[0]);
+  // ASSERT_EQ('9', tmp[0]);
+  f.close();
 }
 
 }  // namespace wikigraph

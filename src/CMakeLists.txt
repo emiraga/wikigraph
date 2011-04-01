@@ -26,28 +26,25 @@ set_target_properties ( hiredis PROPERTIES
 add_executable ( run_tests
     md5/md5.c
     tests/test_file_io.cc
-    tests/test_file_gzio.cc
     tests/test_graph.cc
     tests/test_hash.cc
     tests/test_sql_parser.cc
     gmock/gmock-gtest-all.cc
     tests/run_tests.cc
 )
-
-add_executable ( gen_graph
-    md5/md5.c
-    libhiredis.a
-    gen_graph.cc
-)
-
 target_link_libraries ( run_tests
     ${CMAKE_THREAD_LIBS_INIT}
     z
 )
 
-target_link_libraries ( gen_graph
-    ${CMAKE_THREAD_LIBS_INIT}
-    hiredis
-    z
-)
+#add_executable ( gen_graph
+#    md5/md5.c
+#    libhiredis.a
+#    gen_graph.cc
+#)
+#target_link_libraries ( gen_graph
+#    ${CMAKE_THREAD_LIBS_INIT}
+#    hiredis
+#    z
+#)
 

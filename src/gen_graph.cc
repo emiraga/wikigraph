@@ -25,7 +25,7 @@ typedef BufferedReader<GzipFile, char> CharGzipReader;
 typedef BufferedReader<SystemFile, uint32_t> Int32Reader;
 typedef StreamGraphReader<Int32Reader> GraphSystemReader;
 
-// Types for writing to regular file 
+// Types for writing to regular file
 typedef BufferedWriter<SystemFile> SystemWriter;
 typedef GraphWriter<SystemWriter> GraphSystemWriter;
 
@@ -224,7 +224,7 @@ void DataHandler::data(const vector<string> &data) {
     g_wikistatus[wikiId].type = WikiStatus::REGULAR;
     g_wikigraphId[wikiId] = graphId;
 
-    if((graphId % (1024*4)) == 0) {
+    if ((graphId % (1024*4)) == 0) {
       printf(" %d\n", graphId);
     }
   }
@@ -594,14 +594,14 @@ namespace stage5 {
 void main_stage5() {
   // Setup output graph
   SystemFile f_out;
-  f_out.open("catlinks_bw.graph","wb");
+  f_out.open("catlinks_bw.graph", "wb");
   SystemWriter writer(&f_out);
   GraphSystemWriter graph_out(&writer, g_info.graph_nodes_count);
   // NODES_PER_PASS: How much nodes to process in one pass
 
   node_t nodes = 0;
   node_t last_node = static_cast<node_t>(g_info.graph_nodes_count);
-  for(int pass = 1; nodes < last_node; pass++) {
+  for (int pass = 1; nodes < last_node; pass++) {
     // Open graph with forward links
     SystemFile f_in;
     f_in.open("catlinks_fw.graph", "rb");
@@ -631,7 +631,7 @@ namespace stage6 {
 void main_stage6() {
   // Setup output graph
   SystemFile f_out;
-  f_out.open("catlinks.graph","wb");
+  f_out.open("catlinks.graph", "wb");
   SystemWriter writer(&f_out);
   GraphSystemWriter graph_out(&writer, g_info.graph_nodes_count);
 
@@ -649,7 +649,7 @@ void main_stage6() {
   GraphSystemReader graph_in2(&reader2);
   graph_in2.init();
 
-  AddGraphs<GraphSystemReader, GraphSystemWriter> 
+  AddGraphs<GraphSystemReader, GraphSystemWriter>
     merge(&graph_in1, &graph_in2, &graph_out);
   merge.run();
   printf("You can delete 'catlinks_fw.graph' and 'catlinks_bw.graph'.\n");

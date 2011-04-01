@@ -10,19 +10,19 @@
 #include <vector>
 
 #include "wikigraph_stubs_internal.h"
+#include "file_io.h"
 
 namespace wikigraph {
 
-// class SqlParser
-//
-// FileReader : concrete class BufferedReader<FileSystem, char>
-// DataHandler : class Handler {
-//    public:void data(const vector<string>&);
-// }
-template<class FileReader, class DataHandler>
+class DataHandler {
+ public:
+  virtual ~DataHandler() { }
+  virtual void data(const vector<string> &row) = 0;
+};
+
 class SqlParser {
  public:
-  SqlParser(FileReader *file, DataHandler *data_handler)
+  SqlParser(FileReader<char> *file, DataHandler *data_handler)
   : f_(file), handler_(data_handler) { }
   ~SqlParser() { }
   bool eof() const {
@@ -180,7 +180,7 @@ class SqlParser {
     }
   }
  private:
-  FileReader *f_;
+  FileReader<char> *f_;
   DataHandler *handler_;
  private:
   DISALLOW_COPY_AND_ASSIGN(SqlParser);

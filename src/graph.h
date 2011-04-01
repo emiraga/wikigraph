@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "wikigraph_stubs_internal.h"
+#include "file_io.h"
 
 namespace wikigraph {
 
@@ -35,19 +36,24 @@ class BitArray {
   DISALLOW_COPY_AND_ASSIGN(BitArray);
 };
 
-// class GraphWriter
-//
-// FileWriter : concrete class BufferedWriter
-template<class FileWriter>
 class GraphWriter {
  public:
-  GraphWriter(FileWriter *f, int num_nodes)
+  virtual ~GraphWriter() { };
+  virtual void start_node(node_t node) = 0;
+  virtual void add_edge(node_t edge) = 0;
+  virtual void add_edges(const vector<node_t> &edges) = 0;
+  virtual void finish() = 0;
+};
+
+class GraphBuffWriter : public GraphWriter {
+ public:
+  GraphBuffWriter(FileWriter *f, int num_nodes)
       : writer_(f), nodes_(num_nodes), cur_node_(0), file_pos_(0) {
     size_t list_len = (num_nodes + 2);
     list_ = new node_t[ list_len ];
     memset(list_, 0, sizeof(node_t) * list_len);
   }
-  ~GraphWriter() {
+  ~GraphBuffWriter() {
     finish();
   }
   // Tell the class that you are beginning to emit edges for a new node
@@ -113,7 +119,7 @@ class GraphWriter {
   node_t *list_;  // beginning and end of edge list for each node
   // TODO(user) use struct Graph for this
  private:
-  DISALLOW_COPY_AND_ASSIGN(GraphWriter);
+  DISALLOW_COPY_AND_ASSIGN(GraphBuffWriter);
 };
 
 // Structure for storing complete graph in memory
@@ -153,13 +159,17 @@ struct NodeStream {
   vector<node_t> list;  // Adjacency list
 };
 
-// class StreamGraphReader
-//
-// FileReader : concrete class BufferedReader
-template<class FileReader>
-class StreamGraphReader {
+class GraphReader {
  public:
-  explicit StreamGraphReader(FileReader *f)
+  virtual ~GraphReader() { }
+  virtual void init() = 0;
+  virtual void next_node(NodeStream *node) = 0;
+  virtual bool has_next() = 0;
+};
+
+class StreamGraphReader : public GraphReader {
+ public:
+  explicit StreamGraphReader(FileReader<uint32> *f)
   :file_(f), cur_node_(1) { }
 
   void init() {
@@ -205,20 +215,15 @@ class StreamGraphReader {
   size_t memory_allocated_;
  private:
   Graph graph_;
-  FileReader *file_;
+  FileReader<uint32> *file_;
   node_t cur_node_;
  private:
   DISALLOW_COPY_AND_ASSIGN(StreamGraphReader);
 };
 
-// class AddGraphs
-//
-// GraphReader : concrete class StreamGraphReader
-// FileWriter : concrete class BufferedWriter
-template<class GraphReader, class FileWriter>
 class AddGraphs {
  public:
-  AddGraphs(GraphReader *g1, GraphReader *g2, FileWriter *writer)
+  AddGraphs(GraphReader *g1, GraphReader *g2, GraphWriter *writer)
   :graph1_(g1), graph2_(g2), writer_(writer) {
     assert(graph1_ != graph2_);
   }
@@ -277,16 +282,11 @@ class AddGraphs {
   }
  private:
   GraphReader *graph1_, *graph2_;
-  FileWriter *writer_;
+  GraphWriter *writer_;
  private:
   DISALLOW_COPY_AND_ASSIGN(AddGraphs);
 };
 
-// class TransposeGraphPartially
-//
-// GraphReader : concrete class StreamGraphReader
-// GraphWriter : concrete class GraphWriter
-template<class GraphReader, class GraphWriter>
 class TransposeGraphPartially {
   struct NodeList {
     node_t node;
