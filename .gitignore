@@ -15,3 +15,4 @@ run_tests
 gen_graph
 debug.sh
 core
+config.h

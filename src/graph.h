@@ -38,7 +38,7 @@ class BitArray {
 
 class GraphWriter {
  public:
-  virtual ~GraphWriter() { };
+  virtual ~GraphWriter() { }
   virtual void start_node(node_t node) = 0;
   virtual void add_edge(node_t edge) = 0;
   virtual void add_edges(const vector<node_t> &edges) = 0;

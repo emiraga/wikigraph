@@ -2,11 +2,11 @@
 
 #include <cstdio>
 #include <cctype>
+#include <cstdarg>
 
 #include "config.h"
 #include "sql_parser.h"
 #include "file_io.h"
-#include "file_gzio.h"
 #include "hiredis/hiredis.h"
 #include "hash.h"
 #include "graph.h"
@@ -19,17 +19,7 @@ enum WikiNamespaces {
   NS_CATEGORY = 14,
 };
 
-// Types for reading to regular and gzipped file
-typedef BufferedReader<SystemFile, char> CharReader;
-typedef BufferedReader<GzipFile, char> CharGzipReader;
-typedef BufferedReader<SystemFile, uint32_t> Int32Reader;
-typedef StreamGraphReader<Int32Reader> GraphSystemReader;
-
-// Types for writing to regular file
-typedef BufferedWriter<SystemFile> SystemWriter;
-typedef GraphWriter<SystemWriter> GraphSystemWriter;
-
-namespace {
+namespace {  // unnamed
 
 /**************
  * I would normally use redis for this data, but I was primarily trying to
@@ -66,9 +56,17 @@ struct WikiGraphInfo {
 
 }  // namespace
 
-// Hiding this Ugly syntax with define
+// Hiding this ugly syntax
 // for some reason redisCommand does not return redisReply*
-#define RE_(x) reinterpret_cast<redisReply*>(x)
+// TODO(emiraga): should I make interface for redis?
+redisReply* redisCmd(redisContext *c, const char *format, ...) {
+  va_list argptr;
+  va_start(argptr, format);
+  redisReply* reply = reinterpret_cast<redisReply*>(
+      redisvCommand(c, format, argptr));
+  va_end(argptr);
+  return reply;
+}
 
 /**************
  * STAGE 1
@@ -76,7 +74,7 @@ struct WikiGraphInfo {
  */
 namespace stage1 {
 
-class DataHandler {  // for Stage1
+class PageHandler : public DataHandler {  // for Stage1
  private:
   // SQL schema
   enum Page {
@@ -93,30 +91,30 @@ class DataHandler {  // for Stage1
     page_len = 10  // int(8) unsigned NOT NULL DEFAULT '0',
   };
   redisContext *redis_;
-  BufferedWriter<SystemFile> *is_cat_file_;
+  BufferedWriter *is_cat_file_;
   SystemFile file_;
  public:
-  explicit DataHandler(redisContext *redis)
+  explicit PageHandler(redisContext *redis)
   :redis_(redis), is_cat_file_(NULL) { }
   void init() {
     // file_.open("graph_nodeiscat.bin", "wb");
     // is_cat_file_ = new BufferedWriter<SystemFile>(&file_);
     // is_cat_file_->write_bit(0); //graphId starts from 1
   }
-  ~DataHandler() {
+  ~PageHandler() {
     // delete is_cat_file_;
     /// file_.close();
   }
   void data(const vector<string> &data);
  private:
-  DISALLOW_COPY_AND_ASSIGN(DataHandler);
+  DISALLOW_COPY_AND_ASSIGN(PageHandler);
 };
 
 void main_stage1(redisContext *redis) {
   g_info.graph_nodes_count = g_info.article_count = g_info.category_count = 0;
   g_info.art_redirect_count = g_info.cat_redirect_count = 0;
 
-  DataHandler data_handler(redis);
+  PageHandler data_handler(redis);
   data_handler.init();
 
   const char *fname = DUMPFILES"page.sql";
@@ -124,39 +122,39 @@ void main_stage1(redisContext *redis) {
 
   SystemFile file;
   if (file.open(fname, "rb")) {
-    CharReader reader(&file);
-    SqlParser<CharReader, DataHandler> parser(&reader, &data_handler);
+    BufferedReader<char> reader(&file);
+    SqlParser parser(&reader, &data_handler);
     parser.run();
   } else {
     GzipFile gzfile;
     if (gzfile.open(gzname, "rb")) {
-      CharGzipReader reader(&gzfile);
-      SqlParser<CharGzipReader, DataHandler> parser(&reader, &data_handler);
+      BufferedReader<char> reader(&gzfile);
+      SqlParser parser(&reader, &data_handler);
       parser.run();
     } else {
       fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
     }
   }
   redisReply *reply;
-  reply = RE_(redisCommand(redis,
-      "SET s:count:Articles %d", g_info.article_count));
+  reply = redisCmd(redis,
+      "SET s:count:Articles %d", g_info.article_count);
   freeReplyObject(reply);
-  reply = RE_(redisCommand(redis,
-      "SET s:count:Article_redirects %d", g_info.art_redirect_count));
+  reply = redisCmd(redis,
+      "SET s:count:Article_redirects %d", g_info.art_redirect_count);
   freeReplyObject(reply);
-  reply = RE_(redisCommand(redis,
-      "SET s:count:Categories %d", g_info.category_count));
+  reply = redisCmd(redis,
+      "SET s:count:Categories %d", g_info.category_count);
   freeReplyObject(reply);
-  reply = RE_(redisCommand(redis,
-      "SET s:count:Category_redirects %d", g_info.cat_redirect_count));
+  reply = redisCmd(redis,
+      "SET s:count:Category_redirects %d", g_info.cat_redirect_count);
   freeReplyObject(reply);
-  reply = RE_(redisCommand(redis,
-      "SET s:count:Graph_nodes %d", g_info.graph_nodes_count));
+  reply = redisCmd(redis,
+      "SET s:count:Graph_nodes %d", g_info.graph_nodes_count);
   freeReplyObject(reply);
 }
 
 // mysql table 'page'
-void DataHandler::data(const vector<string> &data) {
+void PageHandler::data(const vector<string> &data) {
   bool is_redir = data[page_is_redirect][0] == '1';
   int namespc = atoi(data[page_namespace].c_str());
 
@@ -189,8 +187,8 @@ void DataHandler::data(const vector<string> &data) {
 
   int graphId = -1;
   if (is_redir) {
-    reply = RE_(redisCommand(redis_,
-        "SETNX %s%s w:%d", prefix, hash.get_hash(), wikiId));
+    reply = redisCmd(redis_,
+        "SETNX %s%s w:%d", prefix, hash.get_hash(), wikiId);
 #ifdef DEBUG
     printf("redirect %s%s  key=%s%s (wikiId=%d)\n",
         prefix, title, prefix, hash.get_hash(), wikiId);
@@ -199,8 +197,8 @@ void DataHandler::data(const vector<string> &data) {
     graphId = ++g_info.graph_nodes_count;
     // is_cat_file_->write_bit(namespc == NS_CATEGORY);
 
-    reply = RE_(redisCommand(redis_,
-        "SETNX %s%s %d", prefix, hash.get_hash(), graphId));
+    reply = redisCmd(redis_,
+        "SETNX %s%s %d", prefix, hash.get_hash(), graphId);
 #ifdef DEBUG
     printf("graph[%d] = %s%s (wikiId=%d)\n", graphId, prefix, title, wikiId);
 #endif
@@ -217,8 +215,8 @@ void DataHandler::data(const vector<string> &data) {
 
   if (is_redir) {
     g_wikistatus[wikiId].type = WikiStatus::REDIRECT;
-    reply = RE_(redisCommand(redis_,
-        "SET w:%d %s%s", wikiId, prefix, hash.get_hash()));
+    reply = redisCmd(redis_,
+        "SET w:%d %s%s", wikiId, prefix, hash.get_hash());
     freeReplyObject(reply);
   } else {
     g_wikistatus[wikiId].type = WikiStatus::REGULAR;
@@ -239,7 +237,7 @@ void DataHandler::data(const vector<string> &data) {
  */
 namespace stage2 {
 
-class DataHandler {
+class RedirectHandler : public DataHandler {
  private:
   // SQL schema
   enum Redirect {
@@ -250,21 +248,21 @@ class DataHandler {
   redisContext *redis_;
  public:
   int unresolved_redir_count;
-  explicit DataHandler(redisContext *redis)
+  explicit RedirectHandler(redisContext *redis)
   :redis_(redis) {
     unresolved_redir_count = 0;
   }
-  ~DataHandler() { }
+  ~RedirectHandler() { }
   void init() { }
   void data(const vector<string> &data);
  private:
-  DISALLOW_COPY_AND_ASSIGN(DataHandler);
+  DISALLOW_COPY_AND_ASSIGN(RedirectHandler);
 };
 
 void main_stage2(redisContext *redis) {
   // Can handle multiple redirects (up to 4 levels)
   const int REDIR_MAX = 4;
-  DataHandler data_handler(redis);
+  RedirectHandler data_handler(redis);
   data_handler.init();
 
   const char *fname = DUMPFILES"redirect.sql";
@@ -277,14 +275,14 @@ void main_stage2(redisContext *redis) {
     // Open redirect.sql
     SystemFile file;
     if (file.open(fname, "rb")) {
-      CharReader reader(&file);
-      SqlParser<CharReader, DataHandler> parser(&reader, &data_handler);
+      BufferedReader<char> reader(&file);
+      SqlParser parser(&reader, &data_handler);
       parser.run();
     } else {
       GzipFile gzfile;
       if (gzfile.open(gzname, "rb")) {
-        CharGzipReader reader(&gzfile);
-        SqlParser<CharGzipReader, DataHandler> parser(&reader, &data_handler);
+        BufferedReader<char> reader(&gzfile);
+        SqlParser parser(&reader, &data_handler);
         parser.run();
       } else {
         fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
@@ -297,7 +295,7 @@ void main_stage2(redisContext *redis) {
 }
 
 // mysql table 'redirect'
-void DataHandler::data(const vector<string> &data) {
+void RedirectHandler::data(const vector<string> &data) {
   int wikiId = atoi(data[rd_from].c_str());
   // Check is redirect was resolved previously
   if (g_wikistatus[wikiId].type != 2)
@@ -322,8 +320,8 @@ void DataHandler::data(const vector<string> &data) {
 
   // Check target
   redisReply *reply;
-  reply = RE_(redisCommand(redis_,
-      "GET %s%s", prefix, hash.get_hash()));
+  reply = redisCmd(redis_,
+      "GET %s%s", prefix, hash.get_hash());
 
   if (reply->type == REDIS_REPLY_NIL || !isdigit(reply->str[0])) {
     freeReplyObject(reply);
@@ -334,20 +332,20 @@ void DataHandler::data(const vector<string> &data) {
     int graphId = atoi(reply->str);
     freeReplyObject(reply);
     // Need to get prefix:hash_key of a page based on its wikiId
-    reply = RE_(redisCommand(redis_, "GET w:%d", wikiId));
+    reply = redisCmd(redis_, "GET w:%d", wikiId);
     assert(reply->type == REDIS_REPLY_STRING && reply->str[1] == ':');
     string prefix_hash(reply->str);
     freeReplyObject(reply);
 
-    reply = RE_(redisCommand(redis_,
-        "SET %s %d", prefix_hash.c_str(), graphId));
+    reply = redisCmd(redis_,
+        "SET %s %d", prefix_hash.c_str(), graphId);
     freeReplyObject(reply);
 
     g_wikistatus[wikiId].type = WikiStatus::RESOLVED;  // Resolved redirect
     g_wikigraphId[wikiId] = graphId;
 
     // This key is no longer needed
-    reply = RE_(redisCommand(redis_, "DEL w:%d", wikiId));
+    reply = redisCmd(redis_, "DEL w:%d", wikiId);
     freeReplyObject(reply);
   }
 }  // DataHandler::data
@@ -360,7 +358,7 @@ void DataHandler::data(const vector<string> &data) {
  */
 namespace stage3 {
 
-class DataHandler {
+class PageLinkHandler : public DataHandler {
  private:
   enum PageLinks {  // SQL schema
     pl_from = 0,  // int(8) unsigned NOT NULL DEFAULT '0',
@@ -368,32 +366,32 @@ class DataHandler {
     pl_title = 2  // varbinary(255) NOT NULL DEFAULT '',
   };
   redisContext *redis_;
-  GraphSystemWriter *graph_;
-  SystemWriter *buff_writer_;
+  GraphWriter *graph_;
+  BufferedWriter *buff_writer_;
   SystemFile file_;
  public:
-  explicit DataHandler(redisContext *redis)
+  explicit PageLinkHandler(redisContext *redis)
   :redis_(redis) { }
   void init() {
     file_.open("artlinks.graph", "wb");
-    buff_writer_ = new SystemWriter(&file_);
-    graph_ = new GraphSystemWriter(buff_writer_, g_info.graph_nodes_count);
+    buff_writer_ = new BufferedWriter(&file_);
+    graph_ = new GraphBuffWriter(buff_writer_, g_info.graph_nodes_count);
   }
-  ~DataHandler() {
+  ~PageLinkHandler() {
     delete graph_;
     delete buff_writer_;
     file_.close();
   }
   void data(const vector<string> &data);
  private:
-  DISALLOW_COPY_AND_ASSIGN(DataHandler);
+  DISALLOW_COPY_AND_ASSIGN(PageLinkHandler);
 };
 
 void main_stage3(redisContext *redis) {
   g_info.article_links_count = g_info.pagelink_rows_count = 0;
   g_info.skipped_catlinks = g_info.skipped_fromcat_links = 0;
 
-  DataHandler data_handler(redis);
+  PageLinkHandler data_handler(redis);
   data_handler.init();
 
   const char *fname = DUMPFILES"pagelinks.sql";
@@ -402,14 +400,14 @@ void main_stage3(redisContext *redis) {
   // Open pagelinks.sql
   SystemFile file;
   if (file.open(fname, "rb")) {
-    CharReader reader(&file);
-    SqlParser<CharReader, DataHandler> parser(&reader, &data_handler);
+    BufferedReader<char> reader(&file);
+    SqlParser parser(&reader, &data_handler);
     parser.run();
   } else {
     GzipFile gzfile;
     if (gzfile.open(gzname, "rb")) {
-      CharGzipReader reader(&gzfile);
-      SqlParser<CharGzipReader, DataHandler> parser(&reader, &data_handler);
+      BufferedReader<char> reader(&gzfile);
+      SqlParser parser(&reader, &data_handler);
       parser.run();
     } else {
       fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
@@ -417,20 +415,20 @@ void main_stage3(redisContext *redis) {
   }
 
   redisReply *reply;
-  reply = RE_(redisCommand(redis,
-      "SET s:count:Article_links %d", g_info.article_links_count));
+  reply = redisCmd(redis,
+      "SET s:count:Article_links %d", g_info.article_links_count);
   freeReplyObject(reply);
-  reply = RE_(redisCommand(redis,
+  reply = redisCmd(redis,
       "SET s:count:Ignored_links_from_category %d",
-      g_info.skipped_fromcat_links));
+      g_info.skipped_fromcat_links);
   freeReplyObject(reply);
-  reply = RE_(redisCommand(redis,
-      "SET s:count:Ignored_links_to_category %d", g_info.skipped_catlinks));
+  reply = redisCmd(redis,
+      "SET s:count:Ignored_links_to_category %d", g_info.skipped_catlinks);
   freeReplyObject(reply);
 }
 
 // mysql table 'pagelink'
-void DataHandler::data(const vector<string> &data) {
+void PageLinkHandler::data(const vector<string> &data) {
   g_info.pagelink_rows_count++;
   int wikiId = atoi(data[pl_from].c_str());
 
@@ -464,8 +462,8 @@ void DataHandler::data(const vector<string> &data) {
   hash.ProcessString(title, data[pl_title].size());
 
   redisReply *reply;
-  reply = RE_(redisCommand(redis_,
-      "GET %s%s", prefix, hash.get_hash()));
+  reply = redisCmd(redis_,
+      "GET %s%s", prefix, hash.get_hash());
   if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
     int to_graphId = atoi(reply->str);
 
@@ -487,7 +485,7 @@ void DataHandler::data(const vector<string> &data) {
  */
 namespace stage4 {
 
-class DataHandler {
+class CategoryLinksHandler : public DataHandler {
   // SQL schema
   enum CategoryLinks {
     cl_from = 0,  // int(10) unsigned NOT NULL DEFAULT '0',
@@ -496,30 +494,30 @@ class DataHandler {
     cl_timestamp = 3  // timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   };
   redisContext *redis_;
-  GraphSystemWriter *graph_;
-  SystemWriter *buff_writer_;
+  GraphWriter *graph_;
+  BufferedWriter *buff_writer_;
   SystemFile file_;
  public:
-  explicit DataHandler(redisContext *redis)
+  explicit CategoryLinksHandler(redisContext *redis)
   :redis_(redis) { }
   void init() {
     file_.open("catlinks_fw.graph", "wb");
-    buff_writer_ = new SystemWriter(&file_);
-    graph_ = new GraphSystemWriter(buff_writer_, g_info.graph_nodes_count);
+    buff_writer_ = new BufferedWriter(&file_);
+    graph_ = new GraphBuffWriter(buff_writer_, g_info.graph_nodes_count);
   }
-  ~DataHandler() {
+  ~CategoryLinksHandler() {
     delete graph_;
     delete buff_writer_;
     file_.close();
   }
   void data(const vector<string> &data);
  private:
-  DISALLOW_COPY_AND_ASSIGN(DataHandler);
+  DISALLOW_COPY_AND_ASSIGN(CategoryLinksHandler);
 };
 
 void main_stage4(redisContext *redis) {
   g_info.category_links_count = 0;
-  DataHandler data_handler(redis);
+  CategoryLinksHandler data_handler(redis);
   data_handler.init();
 
   const char *fname = DUMPFILES"categorylinks.sql";
@@ -528,14 +526,14 @@ void main_stage4(redisContext *redis) {
   // Open categorylinks.sql
   SystemFile file;
   if (file.open(fname, "rb")) {
-    CharReader reader(&file);
-    SqlParser<CharReader, DataHandler> parser(&reader, &data_handler);
+    BufferedReader<char> reader(&file);
+    SqlParser parser(&reader, &data_handler);
     parser.run();
   } else {
     GzipFile gzfile;
     if (gzfile.open(gzname, "rb")) {
-      CharGzipReader reader(&gzfile);
-      SqlParser<CharGzipReader, DataHandler> parser(&reader, &data_handler);
+      BufferedReader<char> reader(&gzfile);
+      SqlParser parser(&reader, &data_handler);
       parser.run();
     } else {
       fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
@@ -543,12 +541,13 @@ void main_stage4(redisContext *redis) {
   }
 
   redisReply *reply;
-  reply = RE_(redisCommand(redis,
-        "SET s:count:Category_links %d", g_info.category_links_count));
+  reply = redisCmd(redis,
+        "SET s:count:Category_links %d", g_info.category_links_count);
   freeReplyObject(reply);
 }
 
-void DataHandler::data(const vector<string> &data) {
+// mysql table 'categorylinks'
+void CategoryLinksHandler::data(const vector<string> &data) {
   int wikiId = atoi(data[cl_from].c_str());
   // If it is not regular page skip it
   if (g_wikistatus[wikiId].type != WikiStatus::REGULAR)
@@ -564,7 +563,7 @@ void DataHandler::data(const vector<string> &data) {
   hash.ProcessString(title, data[cl_to].size());
 
   redisReply *reply;
-  reply = RE_(redisCommand(redis_, "GET %s%s", prefix, hash.get_hash()));
+  reply = redisCmd(redis_, "GET %s%s", prefix, hash.get_hash());
   if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
     int to_graphId = atoi(reply->str);
     freeReplyObject(reply);
@@ -595,8 +594,8 @@ void main_stage5() {
   // Setup output graph
   SystemFile f_out;
   f_out.open("catlinks_bw.graph", "wb");
-  SystemWriter writer(&f_out);
-  GraphSystemWriter graph_out(&writer, g_info.graph_nodes_count);
+  BufferedWriter writer(&f_out);
+  GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
   // NODES_PER_PASS: How much nodes to process in one pass
 
   node_t nodes = 0;
@@ -605,14 +604,14 @@ void main_stage5() {
     // Open graph with forward links
     SystemFile f_in;
     f_in.open("catlinks_fw.graph", "rb");
-    Int32Reader reader(&f_in);
-    GraphSystemReader graph_in(&reader);
+    BufferedReader<uint32_t> reader(&f_in);
+    StreamGraphReader graph_in(&reader);
     graph_in.init();
 
     printf("Pass %d ...\n", pass);
 
-    TransposeGraphPartially<GraphSystemReader, GraphSystemWriter>
-      transpose(&graph_in, nodes+1, nodes+NODES_PER_PASS, &graph_out);
+    TransposeGraphPartially transpose(&graph_in,
+        nodes+1, nodes+NODES_PER_PASS, &graph_out);
     transpose.run();
 
     nodes += NODES_PER_PASS;  // Progress to next pass
@@ -632,25 +631,24 @@ void main_stage6() {
   // Setup output graph
   SystemFile f_out;
   f_out.open("catlinks.graph", "wb");
-  SystemWriter writer(&f_out);
-  GraphSystemWriter graph_out(&writer, g_info.graph_nodes_count);
+  BufferedWriter writer(&f_out);
+  GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
 
   // Open graph with forward links
   SystemFile f_in1;
   f_in1.open("catlinks_fw.graph", "rb");
-  Int32Reader reader1(&f_in1);
-  GraphSystemReader graph_in1(&reader1);
+  BufferedReader<uint32_t> reader1(&f_in1);
+  StreamGraphReader graph_in1(&reader1);
   graph_in1.init();
 
   // Open graph with backward links
   SystemFile f_in2;
   f_in2.open("catlinks_bw.graph", "rb");
-  Int32Reader reader(&f_in2);
-  GraphSystemReader graph_in2(&reader2);
+  BufferedReader<uint32_t> reader2(&f_in2);
+  StreamGraphReader graph_in2(&reader2);
   graph_in2.init();
 
-  AddGraphs<GraphSystemReader, GraphSystemWriter>
-    merge(&graph_in1, &graph_in2, &graph_out);
+  AddGraphs merge(&graph_in1, &graph_in2, &graph_out);
   merge.run();
   printf("You can delete 'catlinks_fw.graph' and 'catlinks_bw.graph'.\n");
 }
@@ -677,7 +675,7 @@ int main(int argc, char *argv[]) {
   }
   // Select database
   redisReply *reply;
-  reply = RE_(redisCommand(redis, "SELECT %d", REDIS_DATABASE));
+  reply = wikigraph::redisCmd(redis, "SELECT %d", REDIS_DATABASE);
   freeReplyObject(reply);
 
   // Run though stages
@@ -700,7 +698,7 @@ int main(int argc, char *argv[]) {
   wikigraph::stage6::main_stage6();
 
   // Save database to disk
-  reply = RE_(redisCommand(redis, "SAVE"));
+  reply = wikigraph::redisCmd(redis, "SAVE");
   freeReplyObject(reply);
 
   return 0;

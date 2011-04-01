@@ -37,14 +37,14 @@ target_link_libraries ( run_tests
     z
 )
 
-#add_executable ( gen_graph
-#    md5/md5.c
-#    libhiredis.a
-#    gen_graph.cc
-#)
-#target_link_libraries ( gen_graph
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    hiredis
-#    z
-#)
+add_executable ( gen_graph
+    md5/md5.c
+    libhiredis.a
+    gen_graph.cc
+)
+target_link_libraries ( gen_graph
+    ${CMAKE_THREAD_LIBS_INIT}
+    hiredis
+    z
+)
 
