@@ -3,6 +3,13 @@ add_definitions ( -Wall -fstrict-aliasing -Wstrict-aliasing=2 -DDEBUG -g -ggdb )
 find_package (Threads)
 find_library(ZLIB z "Zlib library")
 
+# large file support
+execute_process(COMMAND getconf LFS_CFLAGS
+      OUTPUT_VARIABLE LFS_CFLAGS)
+if(LFS_CFLAGS)
+   add_definitions(${LFS_CFLAGS})
+endif(LFS_CFLAGS)
+
 include_directories (
     ${CMAKE_SOURCE_DIR} 
     ${CMAKE_CURRENT_BINARY_DIR}
@@ -27,6 +34,7 @@ add_executable ( run_tests
     md5/md5.c
     tests/test_file_io.cc
     tests/test_graph.cc
+    tests/test_graph_algo.cc
     tests/test_hash.cc
     tests/test_sql_parser.cc
     gmock/gmock-gtest-all.cc

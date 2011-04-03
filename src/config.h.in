@@ -2,7 +2,7 @@
 #ifdef DEBUG
 #define DUMPFILES "mysqldumps/localdump-"
 #else
-#define DUMPFILES "mysqldumps/enwiki-20110115-"
+#define DUMPFILES "mysqldumps/enwiki-20110317-"
 #endif
 
 // Redis database configuration

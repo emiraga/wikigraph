@@ -73,9 +73,12 @@ class CompleteGraphAlgo {
 
     memset(dist_, -1, sizeof(dist_[0])*(graph_.num_nodes + 2));
     dist_[start] = 0;
-    queue_[0] = start;
     dist_count[0]++;
+
+    // Add start node to queue
+    queue_[0] = start;
     int queuesize = 1;
+    // Process nodes from queue
     for (int top = 0; top < queuesize; top++) {
       node_t node = queue_[top];
 
@@ -95,6 +98,7 @@ class CompleteGraphAlgo {
         }
       }
     }
+
     vector<uint32_t> result;
     for (int i = 0; i < DIST_ARRAY; i++) {
       if (!dist_count[i])
@@ -114,9 +118,9 @@ class CompleteGraphAlgo {
 
 namespace util {
 
-vector<pii> count_items(vector<int> &v) {
+vector<pii> count_items(vector<uint32_t> v) {
   sort(v.begin(), v.end());
-  //v.push_back(INT_MAX);
+  v.push_back(INT_MAX);
   vector<pii> result;
 
   int cnt = 0;
@@ -133,7 +137,7 @@ vector<pii> count_items(vector<int> &v) {
 
 string to_json(const vector<uint32_t> &v) {
   string msg = "[";
-  for(int i = 0; i < v.size(); i++) {
+  for(size_t i = 0; i < v.size(); i++) {
     if(i) msg += ",";
     char msgpart[21];
     snprintf(msgpart, 20, "%"PRIu32, v[i]);
@@ -145,7 +149,7 @@ string to_json(const vector<uint32_t> &v) {
 
 string to_json(const vector<pii> &v) {
   string msg = "[";
-  for(int i=0; i<v.size(); i++) {
+  for(size_t i=0; i<v.size(); i++) {
     if(i) msg += ",";
     char msgpart[41];
     snprintf(msgpart, 40, "[%"PRIu32",%"PRIu32"]", v[i].first, v[i].second);
