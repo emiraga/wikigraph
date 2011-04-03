@@ -274,7 +274,7 @@ class BufferedReader : public FileReader<UnitType> {
  private:
   void read_buffer() {
     if(print_progress_) {
-      printf(" %6.3lf%%\n", file_->get_progress());
+      printf(" %7.3lf%%\n", file_->get_progress());
     }
     read_size_ = file_->read(buffer_, sizeof(UnitType), kBufferSize);
   }

@@ -31,9 +31,14 @@ Try it yourself
 
 Without wikipedia dumps you can try how this works on a demo mediawiki database.
 Run a redis server on a localhost and default port.
+** WARNING ** : `gen_graph` will flush all existing keys from redis database,
+be carefull.
 
 	git clone https://emiraga@github.com/emiraga/wikigraph.git
 	cd wikigraph
+
+Edit `src/config.h.in` if you would like to change some settings.
+
   cmake src/
 	make
 	bin/generate_graph_debug

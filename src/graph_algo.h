@@ -8,9 +8,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <map>
+#include <algorithm>
+#include <utility>
+
 #include "graph.h"
 
 namespace wikigraph {
+
+typedef std::pair<uint32_t, uint32_t> pii;
 
 class CompleteGraphAlgo {
   File *file_;
@@ -41,11 +47,11 @@ class CompleteGraphAlgo {
 
     // Read edges
     graph_.edges = new uint32_t[ graph_.num_edges ];
-    file->read(graph_.edges, sizeof(uint32_t), graph_.num_edges);
+    file_->read(graph_.edges, sizeof(uint32_t), graph_.num_edges);
 
     // Read list of nodes (+2 for index zero and extra element at end.)
     graph_.list = new uint32_t[ graph_.num_nodes + 2 ];
-    file_->read(graph_.list, graph_.num_nodes + 2);
+    file_->read(graph_.list, sizeof(uint32_t), graph_.num_nodes + 2);
 
     // For processing
     queue_ = new uint32_t[ graph_.num_nodes + 2];
@@ -54,8 +60,8 @@ class CompleteGraphAlgo {
   ~CompleteGraphAlgo() {
     if(graph_.edges)
       delete[] graph_.edges;
-    if(graph_.nodes)
-      delete[] graph_.nodes;
+    if(graph_.list)
+      delete[] graph_.list;
     if(queue_) {
       delete[] queue_;
       delete[] dist_;
@@ -63,24 +69,24 @@ class CompleteGraphAlgo {
   }
   vector<uint32_t> get_distances(node_t start) {
     uint32_t dist_count[DIST_ARRAY] = {0};
-    map<uint32_t, uint32_t> dist_count_m;
+    std::map<uint32_t, uint32_t> dist_count_m;
 
-    memset(dist_, -1, sizeof(dist));
+    memset(dist_, -1, sizeof(dist_[0])*(graph_.num_nodes + 2));
     dist_[start] = 0;
     queue_[0] = start;
     dist_count[0]++;
     int queuesize = 1;
     for (int top = 0; top < queuesize; top++) {
-      node_t node = queue[top];
+      node_t node = queue_[top];
 
       // Loop over all neighbours of node
-      node_t *target = edges[graph_.start(node)];
-      node_t *end = edges[graph_.end(node)];
+      node_t *target = &graph_.edges[graph_.start(node)];
+      node_t *end = &graph_.edges[graph_.end(node)];
       for ( ; target < end; target++) {
-        int32_t &dist_target = dist_[target];
+        int32_t &dist_target = dist_[*target];
         if (dist_target == -1) {
           dist_target = dist_[node] + 1;
-          queue_[queuesize++] = target;
+          queue_[queuesize++] = *target;
 
           if (dist_target < DIST_ARRAY)
             dist_count[dist_target]++;
@@ -96,7 +102,7 @@ class CompleteGraphAlgo {
 
       result.push_back(dist_count[i]);
     }
-    for (map<int, int>::iterator i = dist_count_m.begin();
+    for (std::map<uint32_t, uint32_t>::iterator i = dist_count_m.begin();
         i != dist_count_m.end(); i++) {
       result.push_back(i->second);
     }
@@ -137,7 +143,7 @@ string to_json(const vector<uint32_t> &v) {
   return msg;
 }
 
-string to_json(const vector<uint32_t> &v) {
+string to_json(const vector<pii> &v) {
   string msg = "[";
   for(int i=0; i<v.size(); i++) {
     if(i) msg += ",";

@@ -68,6 +68,12 @@ redisReply* redisCmd(redisContext *c, const char *format, ...) {
   return reply;
 }
 
+class Stage {
+ public:
+  virtual void main(redisContext *redis) = 0;
+  virtual void finish(redisContext *redis) = 0;
+};
+
 /**************
  * STAGE 1
  * Create graph nodes and store relevant data about nodes
@@ -110,52 +116,57 @@ class PageHandler : public DataHandler {  // for Stage1
   DISALLOW_COPY_AND_ASSIGN(PageHandler);
 };
 
-void main_stage1(redisContext *redis) {
-  g_info.graph_nodes_count = g_info.article_count = g_info.category_count = 0;
-  g_info.art_redirect_count = g_info.cat_redirect_count = 0;
+class Stage1 : public Stage {
+ public:
+  void main(redisContext *redis) {
+    g_info.graph_nodes_count = g_info.article_count = g_info.category_count = 0;
+    g_info.art_redirect_count = g_info.cat_redirect_count = 0;
 
-  PageHandler data_handler(redis);
-  data_handler.init();
+    PageHandler data_handler(redis);
+    data_handler.init();
 
-  const char *fname = DUMPFILES"page.sql";
-  const char *gzname = DUMPFILES"page.sql.gz";
+    const char *fname = DUMPFILES"page.sql";
+    const char *gzname = DUMPFILES"page.sql.gz";
 
-  SystemFile file;
-  if (file.open(fname, "rb")) {
-    BufferedReader<char> reader(&file);
-    reader.set_print_progress(true);
-    SqlParser parser(&reader, &data_handler);
-    parser.run();
-    file.close();
-  } else {
-    GzipFile gzfile;
-    if (gzfile.open(gzname, "rb")) {
-      BufferedReader<char> reader(&gzfile);
+    SystemFile file;
+    if (file.open(fname, "rb")) {
+      BufferedReader<char> reader(&file);
       reader.set_print_progress(true);
       SqlParser parser(&reader, &data_handler);
       parser.run();
+      file.close();
     } else {
-      fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+      GzipFile gzfile;
+      if (gzfile.open(gzname, "rb")) {
+        BufferedReader<char> reader(&gzfile);
+        reader.set_print_progress(true);
+        SqlParser parser(&reader, &data_handler);
+        parser.run();
+      } else {
+        fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+      }
+      gzfile.close();
     }
-    gzfile.close();
   }
-  redisReply *reply;
-  reply = redisCmd(redis,
-      "SET s:count:Articles %d", g_info.article_count);
-  freeReplyObject(reply);
-  reply = redisCmd(redis,
-      "SET s:count:Article_redirects %d", g_info.art_redirect_count);
-  freeReplyObject(reply);
-  reply = redisCmd(redis,
-      "SET s:count:Categories %d", g_info.category_count);
-  freeReplyObject(reply);
-  reply = redisCmd(redis,
-      "SET s:count:Category_redirects %d", g_info.cat_redirect_count);
-  freeReplyObject(reply);
-  reply = redisCmd(redis,
-      "SET s:count:Graph_nodes %d", g_info.graph_nodes_count);
-  freeReplyObject(reply);
-}
+  void finish(redisContext *redis) {
+    redisReply *reply;
+    reply = redisCmd(redis,
+        "SET s:count:Articles %d", g_info.article_count);
+    freeReplyObject(reply);
+    reply = redisCmd(redis,
+        "SET s:count:Article_redirects %d", g_info.art_redirect_count);
+    freeReplyObject(reply);
+    reply = redisCmd(redis,
+        "SET s:count:Categories %d", g_info.category_count);
+    freeReplyObject(reply);
+    reply = redisCmd(redis,
+        "SET s:count:Category_redirects %d", g_info.cat_redirect_count);
+    freeReplyObject(reply);
+    reply = redisCmd(redis,
+        "SET s:count:Graph_nodes %d", g_info.graph_nodes_count);
+    freeReplyObject(reply);
+  }
+};
 
 // mysql table 'page'
 void PageHandler::data(const vector<string> &data) {
@@ -259,45 +270,49 @@ class RedirectHandler : public DataHandler {
   DISALLOW_COPY_AND_ASSIGN(RedirectHandler);
 };
 
-void main_stage2(redisContext *redis) {
-  // Can handle multiple redirects (up to 4 levels)
-  const int REDIR_MAX = 4;
-  RedirectHandler data_handler(redis);
-  data_handler.init();
+class Stage2 : public Stage {
+ public:
+  void main(redisContext *redis) {
+    // Can handle multiple redirects (up to 4 levels)
+    const int REDIR_MAX = 4;
+    RedirectHandler data_handler(redis);
+    data_handler.init();
 
-  const char *fname = DUMPFILES"redirect.sql";
-  const char *gzname = DUMPFILES"redirect.sql.gz";
+    const char *fname = DUMPFILES"redirect.sql";
+    const char *gzname = DUMPFILES"redirect.sql.gz";
 
-  int iter = 0;
-  do {
-    data_handler.unresolved_redir_count = 0;
+    int iter = 0;
+    do {
+      data_handler.unresolved_redir_count = 0;
 
-    // Open redirect.sql
-    SystemFile file;
-    if (file.open(fname, "rb")) {
-      BufferedReader<char> reader(&file);
-      reader.set_print_progress(true);
-      SqlParser parser(&reader, &data_handler);
-      parser.run();
-      file.close();
-    } else {
-      GzipFile gzfile;
-      if (gzfile.open(gzname, "rb")) {
-        BufferedReader<char> reader(&gzfile);
+      // Open redirect.sql
+      SystemFile file;
+      if (file.open(fname, "rb")) {
+        BufferedReader<char> reader(&file);
         reader.set_print_progress(true);
         SqlParser parser(&reader, &data_handler);
         parser.run();
+        file.close();
       } else {
-        fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+        GzipFile gzfile;
+        if (gzfile.open(gzname, "rb")) {
+          BufferedReader<char> reader(&gzfile);
+          reader.set_print_progress(true);
+          SqlParser parser(&reader, &data_handler);
+          parser.run();
+        } else {
+          fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+        }
+        gzfile.close();
       }
-      gzfile.close();
+      printf("Unresolved redirects: %d\n", data_handler.unresolved_redir_count);
+      iter++;
     }
-    printf("Unresolved redirects: %d\n", data_handler.unresolved_redir_count);
-    iter++;
+    while (data_handler.unresolved_redir_count && iter < REDIR_MAX);
   }
-  while (data_handler.unresolved_redir_count && iter < REDIR_MAX);
-}
-
+  void finish(redisContext *redis) {
+  }
+};
 // mysql table 'redirect'
 void RedirectHandler::data(const vector<string> &data) {
   int wikiId = atoi(data[rd_from].c_str());
@@ -391,49 +406,53 @@ class PageLinkHandler : public DataHandler {
   DISALLOW_COPY_AND_ASSIGN(PageLinkHandler);
 };
 
-void main_stage3(redisContext *redis) {
-  g_info.article_links_count = g_info.pagelink_rows_count = 0;
-  g_info.skipped_catlinks = g_info.skipped_fromcat_links = 0;
+class Stage3 : public Stage {
+ public:
+  void main(redisContext *redis) {
+    g_info.article_links_count = g_info.pagelink_rows_count = 0;
+    g_info.skipped_catlinks = g_info.skipped_fromcat_links = 0;
 
-  PageLinkHandler data_handler(redis);
-  data_handler.init();
+    PageLinkHandler data_handler(redis);
+    data_handler.init();
 
-  const char *fname = DUMPFILES"pagelinks.sql";
-  const char *gzname = DUMPFILES"pagelinks.sql.gz";
+    const char *fname = DUMPFILES"pagelinks.sql";
+    const char *gzname = DUMPFILES"pagelinks.sql.gz";
 
-  // Open pagelinks.sql
-  SystemFile file;
-  if (file.open(fname, "rb")) {
-    BufferedReader<char> reader(&file);
-    reader.set_print_progress(true);
-    SqlParser parser(&reader, &data_handler);
-    parser.run();
-    file.close();
-  } else {
-    GzipFile gzfile;
-    if (gzfile.open(gzname, "rb")) {
-      BufferedReader<char> reader(&gzfile);
+    // Open pagelinks.sql
+    SystemFile file;
+    if (file.open(fname, "rb")) {
+      BufferedReader<char> reader(&file);
       reader.set_print_progress(true);
       SqlParser parser(&reader, &data_handler);
       parser.run();
-      gzfile.close();
+      file.close();
     } else {
-      fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+      GzipFile gzfile;
+      if (gzfile.open(gzname, "rb")) {
+        BufferedReader<char> reader(&gzfile);
+        reader.set_print_progress(true);
+        SqlParser parser(&reader, &data_handler);
+        parser.run();
+        gzfile.close();
+      } else {
+        fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+      }
     }
   }
-
-  redisReply *reply;
-  reply = redisCmd(redis,
-      "SET s:count:Article_links %d", g_info.article_links_count);
-  freeReplyObject(reply);
-  reply = redisCmd(redis,
-      "SET s:count:Ignored_links_from_category %d",
-      g_info.skipped_fromcat_links);
-  freeReplyObject(reply);
-  reply = redisCmd(redis,
-      "SET s:count:Ignored_links_to_category %d", g_info.skipped_catlinks);
-  freeReplyObject(reply);
-}
+  void finish(redisContext *redis) {
+    redisReply *reply;
+    reply = redisCmd(redis,
+        "SET s:count:Article_links %d", g_info.article_links_count);
+    freeReplyObject(reply);
+    reply = redisCmd(redis,
+        "SET s:count:Ignored_links_from_category %d",
+        g_info.skipped_fromcat_links);
+    freeReplyObject(reply);
+    reply = redisCmd(redis,
+        "SET s:count:Ignored_links_to_category %d", g_info.skipped_catlinks);
+    freeReplyObject(reply);
+  }
+};
 
 // mysql table 'pagelink'
 void PageLinkHandler::data(const vector<string> &data) {
@@ -523,40 +542,44 @@ class CategoryLinksHandler : public DataHandler {
   DISALLOW_COPY_AND_ASSIGN(CategoryLinksHandler);
 };
 
-void main_stage4(redisContext *redis) {
-  g_info.category_links_count = 0;
-  CategoryLinksHandler data_handler(redis);
-  data_handler.init();
+class Stage4 : public Stage {
+ public:
+  void main(redisContext *redis) {
+    g_info.category_links_count = 0;
+    CategoryLinksHandler data_handler(redis);
+    data_handler.init();
 
-  const char *fname = DUMPFILES"categorylinks.sql";
-  const char *gzname = DUMPFILES"categorylinks.sql.gz";
+    const char *fname = DUMPFILES"categorylinks.sql";
+    const char *gzname = DUMPFILES"categorylinks.sql.gz";
 
-  // Open categorylinks.sql
-  SystemFile file;
-  if (file.open(fname, "rb")) {
-    BufferedReader<char> reader(&file);
-    reader.set_print_progress(true);
-    SqlParser parser(&reader, &data_handler);
-    parser.run();
-    file.close();
-  } else {
-    GzipFile gzfile;
-    if (gzfile.open(gzname, "rb")) {
-      BufferedReader<char> reader(&gzfile);
+    // Open categorylinks.sql
+    SystemFile file;
+    if (file.open(fname, "rb")) {
+      BufferedReader<char> reader(&file);
       reader.set_print_progress(true);
       SqlParser parser(&reader, &data_handler);
       parser.run();
-      gzfile.close();
+      file.close();
     } else {
-      fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+      GzipFile gzfile;
+      if (gzfile.open(gzname, "rb")) {
+        BufferedReader<char> reader(&gzfile);
+        reader.set_print_progress(true);
+        SqlParser parser(&reader, &data_handler);
+        parser.run();
+        gzfile.close();
+      } else {
+        fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+      }
     }
   }
-
-  redisReply *reply;
-  reply = redisCmd(redis,
-        "SET s:count:Category_links %d", g_info.category_links_count);
-  freeReplyObject(reply);
-}
+  void finish(redisContext *redis) {
+    redisReply *reply;
+    reply = redisCmd(redis,
+          "SET s:count:Category_links %d", g_info.category_links_count);
+    freeReplyObject(reply);
+  }
+};
 
 // mysql table 'categorylinks'
 void CategoryLinksHandler::data(const vector<string> &data) {
@@ -602,38 +625,43 @@ void CategoryLinksHandler::data(const vector<string> &data) {
  */
 namespace stage5 {
 
-void main_stage5() {
-  // Setup output graph
-  SystemFile f_out;
-  f_out.open("tmp_catlinks_bw.graph", "wb");
-  if (true) {  // Destroy objects before closing the file
-    BufferedWriter writer(&f_out);
-    GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
-    // NODES_PER_PASS: How much nodes to process in one pass
+class Stage5 : public Stage {
+ public:
+  void main(redisContext *redis) {
+    // Setup output graph
+    SystemFile f_out;
+    f_out.open("tmp_catlinks_bw.graph", "wb");
+    if (true) {  // Destroy objects before closing the file
+      BufferedWriter writer(&f_out);
+      GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
+      // NODES_PER_PASS: How much nodes to process in one pass
 
-    node_t nodes = 0;
-    node_t last_node = static_cast<node_t>(g_info.graph_nodes_count);
-    for (int pass = 1; nodes < last_node; pass++) {
-      // Open graph with forward links
-      SystemFile f_in;
-      f_in.open("tmp_catlinks_fw.graph", "rb");
-      BufferedReader<uint32_t> reader(&f_in);
-      reader.set_print_progress(true);
-      StreamGraphReader graph_in(&reader);
-      graph_in.init();
+      node_t nodes = 0;
+      node_t last_node = static_cast<node_t>(g_info.graph_nodes_count);
+      for (int pass = 1; nodes < last_node; pass++) {
+        // Open graph with forward links
+        SystemFile f_in;
+        f_in.open("tmp_catlinks_fw.graph", "rb");
+        BufferedReader<uint32_t> reader(&f_in);
+        reader.set_print_progress(true);
+        StreamGraphReader graph_in(&reader);
+        graph_in.init();
 
-      printf("Pass %d ...\n", pass);
+        printf("Pass %d ...\n", pass);
 
-      TransposeGraphPartially transpose(&graph_in,
-          nodes+1, nodes+NODES_PER_PASS, &graph_out);
-      transpose.run();
-      f_in.close();
+        TransposeGraphPartially transpose(&graph_in,
+            nodes+1, nodes+NODES_PER_PASS, &graph_out);
+        transpose.run();
+        f_in.close();
 
-      nodes += NODES_PER_PASS;  // Progress to next pass
+        nodes += NODES_PER_PASS;  // Progress to next pass
+      }
     }
+    f_out.close();
   }
-  f_out.close();
-}
+  void finish(redisContext *redis) {
+  }
+};
 
 }  // namespace stage5
 
@@ -644,35 +672,41 @@ void main_stage5() {
  */
 namespace stage6 {
 
-void main_stage6() {
-  // Open graph with forward links
-  SystemFile f_in1;
-  f_in1.open("tmp_catlinks_fw.graph", "rb");
-  BufferedReader<uint32_t> reader1(&f_in1);
-  StreamGraphReader graph_in1(&reader1);
-  graph_in1.init();
+class Stage6 : public Stage {
+ public:
+  void main(redisContext *redis) {
+    // Open graph with forward links
+    SystemFile f_in1;
+    f_in1.open("tmp_catlinks_fw.graph", "rb");
+    BufferedReader<uint32_t> reader1(&f_in1);
+    StreamGraphReader graph_in1(&reader1);
+    graph_in1.init();
 
-  // Open graph with backward links
-  SystemFile f_in2;
-  f_in2.open("tmp_catlinks_bw.graph", "rb");
-  BufferedReader<uint32_t> reader2(&f_in2);
-  StreamGraphReader graph_in2(&reader2);
-  graph_in2.init();
+    // Open graph with backward links
+    SystemFile f_in2;
+    f_in2.open("tmp_catlinks_bw.graph", "rb");
+    BufferedReader<uint32_t> reader2(&f_in2);
+    StreamGraphReader graph_in2(&reader2);
+    graph_in2.init();
 
-  // Setup output graph
-  SystemFile f_out;
-  f_out.open("catlinks.graph", "wb");
-  if (1) {  // Destroy objects before closing files
-    BufferedWriter writer(&f_out);
-    GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
-    AddGraphs merge(&graph_in1, &graph_in2, &graph_out);
-    merge.run();
+    // Setup output graph
+    SystemFile f_out;
+    f_out.open("catlinks.graph", "wb");
+    if (1) {  // Destroy objects before closing files
+      BufferedWriter writer(&f_out);
+      GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
+      AddGraphs merge(&graph_in1, &graph_in2, &graph_out);
+      merge.run();
+    }
+    f_out.close();
+    f_in2.close();
+    f_in1.close();
+    printf("You can delete 'tmp_*.graph'.\n");
   }
-  f_out.close();
-  f_in2.close();
-  f_in1.close();
-  printf("You can delete 'tmp_*.graph'.\n");
-}
+
+  void finish(redisContext *redis) {
+  }
+};
 
 }  // namespace stage6
 
@@ -699,24 +733,34 @@ int main(int argc, char *argv[]) {
   reply = wikigraph::redisCmd(redis, "SELECT %d", REDIS_DATABASE);
   freeReplyObject(reply);
 
+  printf("Flushing database.\n");
+  reply = wikigraph::redisCmd(redis, "FLUSHALL");
+  freeReplyObject(reply);
+
+  // Add stages
+  wikigraph::vector<wikigraph::Stage*> stages;
+  stages.push_back(new wikigraph::stage1::Stage1());
+  stages.push_back(new wikigraph::stage2::Stage2());
+  stages.push_back(new wikigraph::stage3::Stage3());
+  stages.push_back(new wikigraph::stage4::Stage4());
+  stages.push_back(new wikigraph::stage5::Stage5());
+  stages.push_back(new wikigraph::stage6::Stage6());
+
   // Run though stages
-  printf("Starting stage 1 (pages)\n");
-  wikigraph::stage1::main_stage1(redis);
+  for(int i = 0; i < int(stages.size()); i++) {
+    printf("Starting stage %d\n", i+1);
+    stages[i]->main(redis);
+  }
 
-  printf("Starting stage 2 (redirects)\n");
-  wikigraph::stage2::main_stage2(redis);
+  printf("Flushing database.\n");
+  reply = wikigraph::redisCmd(redis, "FLUSHALL");
+  freeReplyObject(reply);
 
-  printf("Starting stage 3 (article links)\n");
-  wikigraph::stage3::main_stage3(redis);
-
-  printf("Starting stage 4 (category inclusions)\n");
-  wikigraph::stage4::main_stage4(redis);
-
-  printf("Starting stage 5 (transpose graph)\n");
-  wikigraph::stage5::main_stage5();
-
-  printf("Starting stage 6 (merge fw and bw edges)\n");
-  wikigraph::stage6::main_stage6();
+  printf("Finalizing.\n");
+  for(int i = 0; i < int(stages.size()); i++) {
+    stages[i]->finish(redis);
+    delete stages[i];
+  }
 
   // Save database to disk
   reply = wikigraph::redisCmd(redis, "SAVE");
