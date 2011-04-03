@@ -6,7 +6,7 @@
 #endif
 
 // Redis database configuration
-#define REDIS_UNIXSOCKET "/tmp/redis.sock"  // define if possible
+#define REDIS_UNIXSOCKET "/tmp/redis.sock"  // define this if possible
 #define REDIS_HOST "127.0.0.1"
 #define REDIS_PORT 6379
 #define REDIS_DATABASE 0  // which database to use 'SELECT db'
@@ -14,7 +14,12 @@
 // In wiki dumps maximum expected pageid
 #define MAX_WIKI_PAGEID 31000000  // current value is 30480288
 
-// While transposing a graph, how much nodes with edges
+// While transposing a graph, how much nodes with edges (linked list)
 // can we keep in memory. This is a tradeoff between memory and speed.
 #define NODES_PER_PASS (1000 * 1000)
+
+// Results of a process_graph will remain in database for x seconds
+// This time is used to wait for a controller to pick-up the results
+// and as a primitive caching mechanism.
+#define RESULTS_EXPIRE 60 // Seconds
 

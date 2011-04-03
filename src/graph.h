@@ -14,9 +14,12 @@ namespace wikigraph {
 class BitArray {
  public:
   explicit BitArray(size_t size) : size_(size) {
-    array_ = new uint32_t[(size+31)/32];
-    // It is initialized to zero
-    memset(array_, 0, sizeof(uint32_t)*((size+31)/32));
+    array_ = new uint32_t[array_size()];
+    // array_ is initialized to zero
+    memset(array_, 0, sizeof(uint32_t)*array_size());
+  }
+  ~BitArray() {
+    delete[] array_;
   }
   bool inline get_value(size_t x) {
     assert(x < size_);
@@ -30,7 +33,16 @@ class BitArray {
     assert(x < size_);
     array_[x/32] &= ~(1 << (x % 32));
   }
+  size_t loadFile(File *f) {
+    return f->read(array_, sizeof(uint32_t), array_size());
+  }
+  size_t writeFile(File *f) {
+    return f->write(array_, sizeof(uint32_t), array_size());
+  }
  private:
+  uint32_t array_size() const {
+    return (size_+31)/32;
+  }
   uint32_t *array_;
   uint32_t size_;
   DISALLOW_COPY_AND_ASSIGN(BitArray);
@@ -55,6 +67,7 @@ class GraphBuffWriter : public GraphWriter {
   }
   ~GraphBuffWriter() {
     finish();
+    delete[] list_;
   }
   // Tell the class that you are beginning to emit edges for a new node
   void start_node(node_t node) {
@@ -170,30 +183,37 @@ class GraphReader {
 class StreamGraphReader : public GraphReader {
  public:
   explicit StreamGraphReader(FileReader<uint32> *f)
-  :file_(f), cur_node_(1) { }
+  :file_(f), cur_node_(1) {
+    graph_.list = NULL;
+    graph_.edges = NULL;  // They will be streamed
+  }
 
   void init() {
+    assert(graph_.list == NULL);
+
     node_t tmp[2];
     file_->read_from_back(tmp, 2);
     graph_.num_edges = tmp[0];
     graph_.num_nodes = tmp[1];
-
-    graph_.edges = NULL;  // They will be streamed
 
     // read +2 additional uint32 for num_edges and num_nodes
     size_t list_len = (graph_.num_nodes + 2) + 2;
 
     // Allocate memory for nodes
     graph_.list = new uint32_t[ list_len ];
-    memory_allocated_ = list_len * sizeof(uint32_t);
 
     // Read list of nodes
     file_->read_from_back(graph_.list, list_len);
+  }
+  ~StreamGraphReader() {
+    if (graph_.list)
+      delete[] graph_.list;
   }
 
   void next_node(NodeStream *node) {
     int len;
     do {
+      assert(cur_node_ <= graph_.num_nodes);
       len = graph_.end(cur_node_) - graph_.start(cur_node_);
       node->id = cur_node_;
       cur_node_++;
@@ -208,11 +228,19 @@ class StreamGraphReader : public GraphReader {
   }
 
   bool has_next() {
+    while (cur_node_ <= graph_.num_nodes
+        && graph_.end(cur_node_) == graph_.start(cur_node_)) {
+      cur_node_++;
+    }
     return cur_node_ <= graph_.num_nodes;
   }
 
- protected:
-  size_t memory_allocated_;
+  uint32_t get_num_edges() const {
+    return graph_.num_edges;
+  }
+  uint32_t get_num_nodes() const {
+    return graph_.num_nodes;
+  }
  private:
   Graph graph_;
   FileReader<uint32> *file_;

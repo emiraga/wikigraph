@@ -108,7 +108,7 @@ nodes are refered to using **graphId**.
 Keys `c:*` are similar as `a:*`. Former is used for categories and latter for
 articles.
 
-Keys `w:<wikiId>` keep the values `a:<hash>` or `c:<hash>`. This is used for
+Keys `w:<wikiId>` keep values `a:<hash>` or `c:<hash>`. This is used for
 reverse lookup of hashes based on **wikiId**.
 
 Keys `s:*` store statistical data.

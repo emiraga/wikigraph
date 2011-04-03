@@ -1,5 +1,5 @@
 cmake_minimum_required ( VERSION 2.6 )
-add_definitions ( -Wall -fstrict-aliasing -Wstrict-aliasing=2 -DDEBUG )
+add_definitions ( -Wall -fstrict-aliasing -Wstrict-aliasing=2 -DDEBUG -g -ggdb )
 find_package (Threads)
 find_library(ZLIB z "Zlib library")
 
@@ -48,3 +48,6 @@ target_link_libraries ( gen_graph
     z
 )
 
+add_executable ( print_graph
+    print_graph.cc
+)

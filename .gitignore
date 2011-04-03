@@ -13,6 +13,7 @@ cmake_install.cmake
 Makefile
 run_tests
 gen_graph
+print_graph
 debug.sh
 core
 config.h

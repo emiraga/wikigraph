@@ -56,9 +56,9 @@ struct WikiGraphInfo {
 
 }  // namespace
 
-// Hiding this ugly syntax
-// for some reason redisCommand does not return redisReply*
-// TODO(emiraga): should I make interface for redis?
+// For some reason redisCommand does not return redisReply*
+// Hiding this ugly syntax.
+// TODO(user): should I make interface for redis?
 redisReply* redisCmd(redisContext *c, const char *format, ...) {
   va_list argptr;
   va_start(argptr, format);
@@ -90,23 +90,23 @@ class PageHandler : public DataHandler {  // for Stage1
     page_latest = 9,  // int(8) unsigned NOT NULL DEFAULT '0',
     page_len = 10  // int(8) unsigned NOT NULL DEFAULT '0',
   };
-  redisContext *redis_;
-  BufferedWriter *is_cat_file_;
-  SystemFile file_;
  public:
   explicit PageHandler(redisContext *redis)
-  :redis_(redis), is_cat_file_(NULL) { }
+  :redis_(redis), is_cat_(NULL) { }
   void init() {
-    // file_.open("graph_nodeiscat.bin", "wb");
-    // is_cat_file_ = new BufferedWriter<SystemFile>(&file_);
-    // is_cat_file_->write_bit(0); //graphId starts from 1
+    file_.open("graph_nodeiscat.bin", "wb");
+    is_cat_ = new BufferedWriter(&file_);
+    is_cat_->write_bit(0);  // graphId starts from 1
   }
   ~PageHandler() {
-    // delete is_cat_file_;
-    /// file_.close();
+    delete is_cat_;
+    file_.close();
   }
   void data(const vector<string> &data);
  private:
+  redisContext *redis_;
+  BufferedWriter *is_cat_;
+  SystemFile file_;
   DISALLOW_COPY_AND_ASSIGN(PageHandler);
 };
 
@@ -123,17 +123,21 @@ void main_stage1(redisContext *redis) {
   SystemFile file;
   if (file.open(fname, "rb")) {
     BufferedReader<char> reader(&file);
+    reader.set_print_progress(true);
     SqlParser parser(&reader, &data_handler);
     parser.run();
+    file.close();
   } else {
     GzipFile gzfile;
     if (gzfile.open(gzname, "rb")) {
       BufferedReader<char> reader(&gzfile);
+      reader.set_print_progress(true);
       SqlParser parser(&reader, &data_handler);
       parser.run();
     } else {
       fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
     }
+    gzfile.close();
   }
   redisReply *reply;
   reply = redisCmd(redis,
@@ -195,7 +199,7 @@ void PageHandler::data(const vector<string> &data) {
 #endif
   } else {
     graphId = ++g_info.graph_nodes_count;
-    // is_cat_file_->write_bit(namespc == NS_CATEGORY);
+    is_cat_->write_bit(namespc == NS_CATEGORY);
 
     reply = redisCmd(redis_,
         "SETNX %s%s %d", prefix, hash.get_hash(), graphId);
@@ -276,17 +280,21 @@ void main_stage2(redisContext *redis) {
     SystemFile file;
     if (file.open(fname, "rb")) {
       BufferedReader<char> reader(&file);
+      reader.set_print_progress(true);
       SqlParser parser(&reader, &data_handler);
       parser.run();
+      file.close();
     } else {
       GzipFile gzfile;
       if (gzfile.open(gzname, "rb")) {
         BufferedReader<char> reader(&gzfile);
+        reader.set_print_progress(true);
         SqlParser parser(&reader, &data_handler);
         parser.run();
       } else {
         fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
       }
+      gzfile.close();
     }
     printf("Unresolved redirects: %d\n", data_handler.unresolved_redir_count);
     iter++;
@@ -401,14 +409,18 @@ void main_stage3(redisContext *redis) {
   SystemFile file;
   if (file.open(fname, "rb")) {
     BufferedReader<char> reader(&file);
+    reader.set_print_progress(true);
     SqlParser parser(&reader, &data_handler);
     parser.run();
+    file.close();
   } else {
     GzipFile gzfile;
     if (gzfile.open(gzname, "rb")) {
       BufferedReader<char> reader(&gzfile);
+      reader.set_print_progress(true);
       SqlParser parser(&reader, &data_handler);
       parser.run();
+      gzfile.close();
     } else {
       fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
     }
@@ -501,7 +513,7 @@ class CategoryLinksHandler : public DataHandler {
   explicit CategoryLinksHandler(redisContext *redis)
   :redis_(redis) { }
   void init() {
-    file_.open("catlinks_fw.graph", "wb");
+    file_.open("tmp_catlinks_fw.graph", "wb");
     buff_writer_ = new BufferedWriter(&file_);
     graph_ = new GraphBuffWriter(buff_writer_, g_info.graph_nodes_count);
   }
@@ -527,14 +539,18 @@ void main_stage4(redisContext *redis) {
   SystemFile file;
   if (file.open(fname, "rb")) {
     BufferedReader<char> reader(&file);
+    reader.set_print_progress(true);
     SqlParser parser(&reader, &data_handler);
     parser.run();
+    file.close();
   } else {
     GzipFile gzfile;
     if (gzfile.open(gzname, "rb")) {
       BufferedReader<char> reader(&gzfile);
+      reader.set_print_progress(true);
       SqlParser parser(&reader, &data_handler);
       parser.run();
+      gzfile.close();
     } else {
       fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
     }
@@ -593,29 +609,34 @@ namespace stage5 {
 void main_stage5() {
   // Setup output graph
   SystemFile f_out;
-  f_out.open("catlinks_bw.graph", "wb");
-  BufferedWriter writer(&f_out);
-  GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
-  // NODES_PER_PASS: How much nodes to process in one pass
+  f_out.open("tmp_catlinks_bw.graph", "wb");
+  if (true) {  // Destroy objects before closing the file
+    BufferedWriter writer(&f_out);
+    GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
+    // NODES_PER_PASS: How much nodes to process in one pass
 
-  node_t nodes = 0;
-  node_t last_node = static_cast<node_t>(g_info.graph_nodes_count);
-  for (int pass = 1; nodes < last_node; pass++) {
-    // Open graph with forward links
-    SystemFile f_in;
-    f_in.open("catlinks_fw.graph", "rb");
-    BufferedReader<uint32_t> reader(&f_in);
-    StreamGraphReader graph_in(&reader);
-    graph_in.init();
+    node_t nodes = 0;
+    node_t last_node = static_cast<node_t>(g_info.graph_nodes_count);
+    for (int pass = 1; nodes < last_node; pass++) {
+      // Open graph with forward links
+      SystemFile f_in;
+      f_in.open("tmp_catlinks_fw.graph", "rb");
+      BufferedReader<uint32_t> reader(&f_in);
+      reader.set_print_progress(true);
+      StreamGraphReader graph_in(&reader);
+      graph_in.init();
 
-    printf("Pass %d ...\n", pass);
+      printf("Pass %d ...\n", pass);
 
-    TransposeGraphPartially transpose(&graph_in,
-        nodes+1, nodes+NODES_PER_PASS, &graph_out);
-    transpose.run();
+      TransposeGraphPartially transpose(&graph_in,
+          nodes+1, nodes+NODES_PER_PASS, &graph_out);
+      transpose.run();
+      f_in.close();
 
-    nodes += NODES_PER_PASS;  // Progress to next pass
+      nodes += NODES_PER_PASS;  // Progress to next pass
+    }
   }
+  f_out.close();
 }
 
 }  // namespace stage5
@@ -628,29 +649,33 @@ void main_stage5() {
 namespace stage6 {
 
 void main_stage6() {
-  // Setup output graph
-  SystemFile f_out;
-  f_out.open("catlinks.graph", "wb");
-  BufferedWriter writer(&f_out);
-  GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
-
   // Open graph with forward links
   SystemFile f_in1;
-  f_in1.open("catlinks_fw.graph", "rb");
+  f_in1.open("tmp_catlinks_fw.graph", "rb");
   BufferedReader<uint32_t> reader1(&f_in1);
   StreamGraphReader graph_in1(&reader1);
   graph_in1.init();
 
   // Open graph with backward links
   SystemFile f_in2;
-  f_in2.open("catlinks_bw.graph", "rb");
+  f_in2.open("tmp_catlinks_bw.graph", "rb");
   BufferedReader<uint32_t> reader2(&f_in2);
   StreamGraphReader graph_in2(&reader2);
   graph_in2.init();
 
-  AddGraphs merge(&graph_in1, &graph_in2, &graph_out);
-  merge.run();
-  printf("You can delete 'catlinks_fw.graph' and 'catlinks_bw.graph'.\n");
+  // Setup output graph
+  SystemFile f_out;
+  f_out.open("catlinks.graph", "wb");
+  if (1) {  // Destroy objects before closing files
+    BufferedWriter writer(&f_out);
+    GraphBuffWriter graph_out(&writer, g_info.graph_nodes_count);
+    AddGraphs merge(&graph_in1, &graph_in2, &graph_out);
+    merge.run();
+  }
+  f_out.close();
+  f_in2.close();
+  f_in1.close();
+  printf("You can delete 'tmp_*.graph'.\n");
 }
 
 }  // namespace stage6
@@ -701,6 +726,7 @@ int main(int argc, char *argv[]) {
   reply = wikigraph::redisCmd(redis, "SAVE");
   freeReplyObject(reply);
 
+  redisFree(redis);
   return 0;
 }
 

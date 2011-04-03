@@ -37,14 +37,9 @@ class SystemFile : public File {
  public:
   SystemFile() { }
   bool open(const char *path, const char *mode) {
+    file_size_ = 0;
     f_ = ::fopen(path, mode);
-    if (!f_)
-      return false;
-    // Determine file size (used in get_progress)
-    ::fseeko(f_, 0, SEEK_END);
-    file_size_ = ::ftello(f_);
-    ::fseeko(f_, 0, SEEK_SET);
-    return true;
+    return f_ != NULL;
   }
   size_t write(const void *ptr, size_t size, size_t nmemb) {
     return ::fwrite(ptr, size, nmemb, f_);
@@ -66,9 +61,18 @@ class SystemFile : public File {
   }
   // Only useful when reading files
   double get_progress() {
+    if(!file_size_)
+      file_size_ = file_size(); 
     return 100.0 * tell() / file_size_;
   }
  private:
+  off_t file_size() {
+    off_t pos = tell();
+    seek(0, SEEK_END);
+    off_t ret = tell();
+    seek(pos, SEEK_SET);
+    return ret;
+  }
   FILE *f_;
   off_t file_size_;
   DISALLOW_COPY_AND_ASSIGN(SystemFile);
@@ -78,13 +82,10 @@ class GzipFile : public File {
  public:
   GzipFile() { }
   bool open(const char *path, const char *mode) {
+    file_size_ = 0;
     f_plain_ = fopen(path, mode);
     if (!f_plain_)
       return false;
-    // Determine file size (used in get_progress)
-    struct stat file_info;
-    fstat(fileno(f_plain_), &file_info);
-    file_size_ = file_info.st_size;
     // Open az gzip
     f_ = ::gzdopen(fileno(f_plain_), mode);
     return f_ != Z_NULL;
@@ -111,12 +112,21 @@ class GzipFile : public File {
   }
   // Only useful when reading files
   double get_progress() {
+    if(!file_size_)
+      file_size_ = file_size();
     // To obtain current position in a file, we query file pointer
     // of the compressed file. There are many problems with this:
     // mainly, is that it is not very precise, and potentially not portable.
     return 100.0 * lseek(fileno(f_plain_), 0, SEEK_CUR) / file_size_;
   }
  private:
+  off_t file_size() {
+    // Determine file size (used in get_progress)
+    // Potentially not portable!
+    struct stat file_info;
+    fstat(fileno(f_plain_), &file_info);
+    return file_info.st_size;
+  }
   gzFile f_;
   FILE *f_plain_;
   off_t file_size_;
@@ -135,10 +145,13 @@ class FileWriter {
 class BufferedWriter : public FileWriter {
  public:
   explicit BufferedWriter(File *f)
-      :file_(f), pos_(0), bitpos_(0) { }
+      :file_(f), pos_(0), bitpos_(0) {
+    buffer_ = new uint32_t[kBufferSize];
+  }
 
   ~BufferedWriter() {
     finish();
+    delete[] buffer_;
   }
 
   void flush() {
@@ -189,7 +202,7 @@ class BufferedWriter : public FileWriter {
     return file_->write(ptr, size, nmemb);
   }
  private:
-  uint32_t buffer_[kBufferSize];
+  uint32_t *buffer_;  // [kBufferSize];
   File *file_;
   size_t pos_;
   int bitpos_;
@@ -206,15 +219,20 @@ class FileReader {
   virtual UnitType read_unit() = 0;
   virtual UnitType peek_unit() = 0;
   virtual void read_from_back(UnitType *ptr, size_t nmemb) = 0;
+  virtual void set_print_progress(bool do_print) = 0;
 };
 
 template<class UnitType>
 class BufferedReader : public FileReader<UnitType> {
  public:
   explicit BufferedReader(File *f)
-      :file_(f), read_size_(0), index_(0) { }
+      :file_(f), read_size_(0), index_(0), print_progress_(false) {
+    buffer_ = new UnitType[kBufferSize];
+  }
 
-  ~BufferedReader() { }
+  ~BufferedReader() {
+    delete[] buffer_;
+  }
 
   bool eof() const {
     return read_size_ == 0 && file_->eof();
@@ -250,15 +268,22 @@ class BufferedReader : public FileReader<UnitType> {
     file_->seek(pos, SEEK_SET);
   }
 
+  void set_print_progress(bool do_print) {
+    print_progress_ = do_print;
+  }
  private:
   void read_buffer() {
+    if(print_progress_) {
+      printf(" %6.3lf%%\n", file_->get_progress());
+    }
     read_size_ = file_->read(buffer_, sizeof(UnitType), kBufferSize);
   }
 
-  UnitType buffer_[kBufferSize];
+  UnitType *buffer_;  // [kBufferSize];
   File *file_;
   size_t read_size_;
   size_t index_;
+  bool print_progress_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(BufferedReader);

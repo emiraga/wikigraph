@@ -35,6 +35,7 @@ class MockFileReader : public FileReader<UnitType> {
   MOCK_METHOD0_T(read_unit, UnitType());
   MOCK_METHOD0_T(peek_unit, UnitType());
   MOCK_METHOD2_T(read_from_back, void(UnitType *ptr, size_t nmemb));
+  MOCK_METHOD1_T(set_print_progress, void(bool do_print));
 };
 
 class StubFile : public File {

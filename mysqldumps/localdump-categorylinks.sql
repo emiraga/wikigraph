@@ -40,7 +40,7 @@ CREATE TABLE `categorylinks` (
 
 LOCK TABLES `categorylinks` WRITE;
 /*!40000 ALTER TABLE `categorylinks` DISABLE KEYS */;
-INSERT INTO `categorylinks` VALUES (10,'Cat1','Art1','2011-03-28 20:25:13'),(11,'Cat2','Cat1','2011-03-28 20:25:28');
+INSERT INTO `categorylinks` VALUES (10,'Cat1','Art1','2011-03-28 20:25:13'),(11,'Cat2','Cat1','2011-03-28 20:25:28'),(13,'HasPage','InCategory','2011-04-01 10:09:36');
 /*!40000 ALTER TABLE `categorylinks` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -53,4 +53,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2011-03-29 12:42:45
+-- Dump completed on 2011-04-03 17:56:07
