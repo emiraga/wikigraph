@@ -225,10 +225,6 @@ void PageHandler::data(const vector<string> &data) {
   } else {
     g_wikistatus[wikiId].type = WikiStatus::REGULAR;
     g_wikigraphId[wikiId] = graphId;
-
-    if ((graphId % (1024*4)) == 0) {
-      printf(" %d\n", graphId);
-    }
   }
   return;
 }  // DataHandler::data

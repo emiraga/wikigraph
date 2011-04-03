@@ -3,6 +3,8 @@
 #ifndef SRC_GRAPH_ALGO_H_
 #define SRC_GRAPH_ALGO_H_
 
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -123,24 +125,24 @@ vector<pii> count_items(vector<int> &v) {
   return result;
 }
 
-string to_json(const vector<int> &v) {
+string to_json(const vector<uint32_t> &v) {
   string msg = "[";
   for(int i = 0; i < v.size(); i++) {
     if(i) msg += ",";
-    char msgpart[20];
-    sprintf(msgpart, "%d", v[i]);
+    char msgpart[21];
+    snprintf(msgpart, 20, "%"PRIu32, v[i]);
     msg += string(msgpart);
   }
   msg += "]";
   return msg;
 }
 
-string to_json(const vector<pii> &v) {
+string to_json(const vector<uint32_t> &v) {
   string msg = "[";
   for(int i=0; i<v.size(); i++) {
     if(i) msg += ",";
-    char msgpart[31];
-    snprintf(msgpart, 30, "[%d,%d]", v[i].first, v[i].second);
+    char msgpart[41];
+    snprintf(msgpart, 40, "[%"PRIu32",%"PRIu32"]", v[i].first, v[i].second);
     msg += string(msgpart);
   }
   msg += "]";
