@@ -76,6 +76,11 @@ TEST(CompleteGraphAlgo, BFSsimple) {
   ASSERT_EQ(2u, res.size());
   ASSERT_EQ(1u, res[0]);
   ASSERT_EQ(1u, res[1]);
+
+  vector<pii> res2 = algo.scc();
+  ASSERT_EQ(1u, res2.size());
+  ASSERT_EQ(1u, res2[0].first);
+  ASSERT_EQ(3u, res2[0].second);
 }
 
 }  // namespace wikigraph
