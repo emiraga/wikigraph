@@ -81,7 +81,7 @@ class Stage {
 namespace stage1 {
 
 class PageHandler : public DataHandler {  // for Stage1
- private:
+ protected:
   // SQL schema
   enum Page {
     page_id = 0,  // int(8) unsigned NOT NULL AUTO_INCREMENT,
@@ -105,15 +105,27 @@ class PageHandler : public DataHandler {  // for Stage1
     is_cat_->write_bit(0);  // graphId starts from 1
   }
   ~PageHandler() {
-    delete is_cat_;
-    file_.close();
+    if (is_cat_) {
+      delete is_cat_;
+      file_.close();
+    }
   }
   void data(const vector<string> &data);
- private:
+ protected:
   redisContext *redis_;
+ private:
   BufferedWriter *is_cat_;
   SystemFile file_;
   DISALLOW_COPY_AND_ASSIGN(PageHandler);
+};
+
+class PageHandlerNames : public PageHandler {
+ public:
+  explicit PageHandlerNames(redisContext *redis)
+  : PageHandler(redis) { }
+  void data(const vector<string> &data);
+ private:
+  DISALLOW_COPY_AND_ASSIGN(PageHandlerNames);
 };
 
 class Stage1 : public Stage {
@@ -148,6 +160,7 @@ class Stage1 : public Stage {
       gzfile.close();
     }
   }
+
   void finish(redisContext *redis) {
     redisReply *reply;
     reply = redisCmd(redis,
@@ -165,6 +178,32 @@ class Stage1 : public Stage {
     reply = redisCmd(redis,
         "SET s:count:Graph_nodes %d", g_info.graph_nodes_count);
     freeReplyObject(reply);
+
+    PageHandlerNames data_handler(redis);
+    data_handler.init();
+
+    const char *fname = DUMPFILES"page.sql";
+    const char *gzname = DUMPFILES"page.sql.gz";
+
+    SystemFile file;
+    if (file.open(fname, "rb")) {
+      BufferedReader<char> reader(&file);
+      reader.set_print_progress(true);
+      SqlParser parser(&reader, &data_handler);
+      parser.run();
+      file.close();
+    } else {
+      GzipFile gzfile;
+      if (gzfile.open(gzname, "rb")) {
+        BufferedReader<char> reader(&gzfile);
+        reader.set_print_progress(true);
+        SqlParser parser(&reader, &data_handler);
+        parser.run();
+        gzfile.close();
+      } else {
+        fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+      }
+    }
   }
 };
 
@@ -239,6 +278,32 @@ void PageHandler::data(const vector<string> &data) {
   }
   return;
 }  // DataHandler::data
+
+// mysql table 'page' for saving names
+void PageHandlerNames::data(const vector<string> &data) {
+  bool is_redir = data[page_is_redirect][0] == '1';
+  int namespc = atoi(data[page_namespace].c_str());
+
+  int wikiId = atoi(data[page_id].c_str());
+  assert(wikiId <= MAX_WIKI_PAGEID);
+
+  const char *prefix;
+  if (namespc == NS_MAIN) {  // Articles
+    prefix = "a:";
+  } else if (namespc == NS_CATEGORY) {  // Categories
+    prefix = "c:";
+  } else {
+    return;  // Other namespaces are not interesting
+  }
+
+  const char *title = data[page_title].c_str();
+  if (!is_redir) {
+    uint32_t graphId = g_wikigraphId[wikiId];
+    redisReply *reply;
+    reply = redisCmd(redis_, "SET n:%d %s%s", graphId, prefix, title);//
+    freeReplyObject(reply);
+  }
+}  // DataHandlerNames::data
 
 }  // namespace stage1
 
@@ -747,7 +812,7 @@ int main(int argc, char *argv[]) {
   stages.push_back(new wikigraph::stage6::Stage6());
 
   // Run though stages
-  for(int i = 0; i < int(stages.size()); i++) {
+  for (int i = 0; i < int(stages.size()); i++) {
     printf("Starting stage %d\n", i+1);
     stages[i]->main(redis);
   }
@@ -757,7 +822,7 @@ int main(int argc, char *argv[]) {
   freeReplyObject(reply);
 
   printf("Finalizing.\n");
-  for(int i = 0; i < int(stages.size()); i++) {
+  for (int i = 0; i < int(stages.size()); i++) {
     stages[i]->finish(redis);
     delete stages[i];
   }
