@@ -58,6 +58,7 @@ typedef uint64_t uint64;
 
 using std::string;
 using std::vector;
+using std::pair;
 
 #define DISALLOW_COPY_AND_ASSIGN(TypeName) \
   TypeName(const TypeName&);               \

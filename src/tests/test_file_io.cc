@@ -120,7 +120,7 @@ TEST(GzipFile, simple) {
   f.read(tmp, 1, 2);
   ASSERT_EQ('0', tmp[0]);
   ASSERT_EQ('1', tmp[1]);
-  ASSERT_EQ(false, f.eof());
+  ASSERT_FALSE(f.eof());
   memset(tmp, 0, 15);
   f.read(tmp, 1, 10);
   ASSERT_STREQ("23456789", tmp);
@@ -135,7 +135,7 @@ TEST(GzipFile, seek_tell) {
   f.read(tmp, 2, 1);
   ASSERT_EQ('0', tmp[0]);
   ASSERT_EQ('1', tmp[1]);
-  ASSERT_EQ(false, f.eof());
+  ASSERT_FALSE(f.eof());
   ASSERT_EQ(2, f.tell());
 
   f.seek(3, SEEK_SET);
@@ -144,7 +144,7 @@ TEST(GzipFile, seek_tell) {
   f.read(tmp, 2, 1);
   ASSERT_EQ('3', tmp[0]);
   ASSERT_EQ('4', tmp[1]);
-  ASSERT_EQ(false, f.eof());
+  ASSERT_FALSE(f.eof());
   ASSERT_EQ(5, f.tell());
 
   f.seek(-3, SEEK_CUR);

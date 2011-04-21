@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <utility>
 #include <climits>
+#include <cmath>
 
 #include "graph.h"
 
@@ -70,13 +71,6 @@ string to_json(const vector<pii> &v) {
 }  // namespace util
 
 class CompleteGraphAlgo {
-  File *file_;
-  Graph graph_;
-
-  // Used in computation
-  node_t *queue_;
-  int32_t *dist_;
-
   static const int DIST_ARRAY = 100;  // threshold to use array for distances
  public:
   CompleteGraphAlgo(File *file)
@@ -118,7 +112,7 @@ class CompleteGraphAlgo {
       delete[] dist_;
     }
   }
-  vector<uint32_t> get_distances(node_t start) {
+  vector<uint32_t> GetDistances(node_t start) {
     uint32_t dist_count[DIST_ARRAY] = {0};
     std::map<uint32_t, uint32_t> dist_count_m;
 
@@ -165,7 +159,7 @@ class CompleteGraphAlgo {
     return result;
   }
 
-  vector<pii> scc() {  // Tarjan
+  vector<pii> Scc() {  // Tarjan
     int tindex = 1;
     int top = -1;
     int top_scc = -1;
@@ -263,6 +257,74 @@ class CompleteGraphAlgo {
 
     return util::count_items(scc_result);
   }
+
+  vector<pair<double, node_t> > PageRank(uint32 N, int how_many) {
+    double *rank1 = new double[graph_.num_nodes + 2];
+    double *rank2 = new double[graph_.num_nodes + 2];
+
+    const double dumping = 0.85;
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      rank1[node] = 1.0 / N;
+    }
+
+    while (true) {
+      double sum = 0.0;
+      for (node_t node = 1; node <= graph_.num_nodes; node++) {
+        sum += rank1[node];
+      }
+      std::cout << "Rank sum: " << sum << endl;
+
+      PowerIteration(N, dumping, rank1, rank2);
+      std::swap(rank1, rank2);
+      // rank1 contains results
+
+      double delta = 0.0;
+      for (node_t node = 1; node <= graph_.num_nodes; node++) {
+        delta += std::fabs(rank1[node] - rank2[node]);
+      }
+      std::cout << "Delta: " << delta << endl;
+      if (delta < 1e-15)
+        break;
+    }
+
+    vector<pair<double, node_t> > ret;
+
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      ret.push_back(std::make_pair(rank1[node], node));
+    }
+    delete[] rank1;
+    delete[] rank2;
+
+    std::partial_sort(ret.begin(), ret.begin() + how_many, ret.end(),
+        std::greater< pair<double, node_t> >());
+    ret.resize(how_many);
+    return ret;
+  }
+ protected:
+  void PowerIteration(uint32_t N, double dumping,
+      double *rank_in, double *rank_out) {
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      rank_out[node] = (1.0 - dumping) / N;
+    }
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      node_t *target = &graph_.edges[graph_.start(node)];
+      node_t *end = &graph_.edges[graph_.end(node)];
+      int out_degree = graph_.end(node) - graph_.start(node);
+
+      double contrib_rank = dumping * rank_in[node] / out_degree;
+      for ( ; target < end; target++) {
+        // link is from (node) to (*target)
+        rank_out[*target] += contrib_rank;
+      }
+    }
+  }
+ private:
+  File *file_;
+  Graph graph_;
+
+  // Used in computation
+  node_t *queue_;
+  int32_t *dist_;
  private:
   DISALLOW_COPY_AND_ASSIGN(CompleteGraphAlgo);
 };

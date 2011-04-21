@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 5.1.49, for debian-linux-gnu (i686)
+-- MySQL dump 10.13  Distrib 5.1.54, for debian-linux-gnu (i686)
 --
 -- Host: localhost    Database: wikidb
 -- ------------------------------------------------------
--- Server version	5.1.49-1ubuntu8.1
+-- Server version	5.1.54-1ubuntu4
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -38,7 +38,7 @@ CREATE TABLE `pagelinks` (
 
 LOCK TABLES `pagelinks` WRITE;
 /*!40000 ALTER TABLE `pagelinks` DISABLE KEYS */;
-INSERT INTO `pagelinks` VALUES (1,0,'Main_Page2'),(3,0,'Mesh2'),(3,0,'Mesh3'),(3,0,'Mesh4'),(4,0,'Mesh1'),(4,0,'Mesh5'),(5,0,'Mesh5'),(6,0,'Mesh5'),(7,0,'Mesh1'),(8,0,'Main_Page2_R1'),(9,0,'Main_Page2_R2');
+INSERT INTO `pagelinks` VALUES (3,0,'P1'),(4,0,'P1'),(5,0,'P1');
 /*!40000 ALTER TABLE `pagelinks` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -51,4 +51,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2011-04-03 21:42:41
+-- Dump completed on 2011-04-21 13:26:52

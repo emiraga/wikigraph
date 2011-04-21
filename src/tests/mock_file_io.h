@@ -16,7 +16,7 @@ class MockFile : public File {
   MOCK_METHOD0(close, int());
   MOCK_METHOD0(tell, off_t());
   MOCK_METHOD2(seek, int(off_t offset, int whence));
-  MOCK_METHOD0(eof, int());
+  MOCK_METHOD0(eof, bool());
   MOCK_METHOD0(get_progress, double());
 };
 
@@ -81,7 +81,7 @@ class StubFile : public File {
   off_t tell() {
     return pos_;
   }
-  int eof() {
+  bool eof() {
     return pos_ >= size_;
   }
   double get_progress() {

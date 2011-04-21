@@ -28,7 +28,7 @@ class File {
   virtual int close() = 0;
   virtual off_t tell() = 0;
   virtual int seek(off_t offset, int whence) = 0;
-  virtual int eof() = 0;
+  virtual bool eof() = 0;
   // Only useful when reading files
   virtual double get_progress() = 0;
 };
@@ -56,7 +56,7 @@ class SystemFile : public File {
   int seek(off_t offset, int whence) {
     return ::fseeko(f_, offset, whence);
   }
-  int eof() {
+  bool eof() {
     return ::feof(f_);
   }
   // Only useful when reading files
@@ -107,7 +107,7 @@ class GzipFile : public File {
     assert(whence != SEEK_END);  // per gzseek man page
     return ::gzseek(f_, offset, whence);
   }
-  int eof() {
+  bool eof() {
     return ::gzeof(f_);
   }
   // Only useful when reading files
