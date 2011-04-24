@@ -15,32 +15,30 @@
 #include <map>
 #include <string>
 
-#include "hiredis/hiredis.h"
 #include "config.h"
-
-typedef pair<int, int> pii;
+#include "wikigraph_stubs_internal.h"
+#include "redis.h"
+#include "file_io.h"
+#include "graph_algo.h"
 
 namespace wikigraph {
-
 
 void print_help(char *prg) {
   printf("Usage: %s [options]\n", prg);
   printf("\n");
   printf("-f N\tStart N background workers\n");
-  printf("-r HOST\tName of the host of redis server, default:%s\n", REDISHOST);
-  printf("-p PORT\tPort of redis server, default:%d\n", REDISPORT);
+  printf("-r HOST\tName of the host of redis server, default:%s\n", REDIS_HOST);
+  printf("-p PORT\tPort of redis server, default:%d\n", REDIS_PORT);
   printf("-h\tShow this help\n");
   printf("\n");
   printf("Visit https://github.com/emiraga/wikigraph for more info.\n");
 }
 
-}  // namespace wikigraph
-
 int main(int argc, char *argv[]) {
   int fork_off = 0;
 
-  char redis_host[51] = REDISHOST;
-  int redis_port = REDISPORT;
+  char redis_host[51] = REDIS_HOST;
+  int redis_port = REDIS_PORT;
 
   while (1) {
     int option = getopt(argc, argv, "f:r:p:h");
@@ -70,12 +68,40 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Should be called before fork()'s to save memory (copy-on-write)
-  load_graph();
+  // Should be called before fork()'s to save memory (copy-on-write)  
+  SystemFile f_art;
+  if(! f_art.open("artlinks.graph","rb")) {
+    perror("fopen");
+    exit(1);
+  }
+  CompleteGraphAlgo art_graph(&f_art);
+  art_graph.Init();
+  f_art.close();
 
+  // Load category links
+  SystemFile f_cat;
+  if(!f_cat.open("catlinks.graph","rb")) {
+    perror("fopen");
+    exit(1);
+  }
+  CompleteGraphAlgo cat_graph(&f_cat);
+  cat_graph.Init();
+  f_cat.close();
+  
+  // Load bit array => is node a category
+  BitArray is_category(art_graph.num_nodes()+1);
+  SystemFile f_iscat;
+  if(!f_iscat.open("graph_nodeiscat.bin", "rb")) {
+    perror("fopen");
+    exit(1);
+  }
+  is_category.loadFile(&f_iscat);
+  f_iscat.close();
+
+  // Forking children into background
   bool is_parent = true;
   if (fork_off) {
-    for (int i = 1; i < fork_off; i++) {
+    for (int i = 0; i < fork_off; i++) {
       if (!fork()) {
         is_parent = false;
         break;
@@ -87,6 +113,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Connect to redis server over network (not unix-socket)
   redisContext *c;
   struct timeval timeout = { 1, 500000 };  // 1.5 seconds
   c = redisConnectWithTimeout(redis_host, redis_port, timeout);
@@ -95,22 +122,24 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  redisReply *reply = (redisReply*)redisCommand(c, "GET s:count:Graph_nodes");
+  redisReply *reply = redisCmd(c, "GET s:count:Graph_nodes");
   assert(reply->type == REDIS_REPLY_STRING);
 
-  num_nodes = atoi(reply->str);
+  uint32_t num_nodes = atoi(reply->str);
   freeReplyObject(reply);
+
+  if(num_nodes != art_graph.num_nodes() || num_nodes != cat_graph.num_nodes()) {
+    fprintf(stderr, "Number of nodes mismatch.\n");
+    exit(1);
+  }
 
   if (is_parent) {
     printf("Number of nodes %d\n", num_nodes);
   }
 
-  // Assure that we don't exceed maximum number of nodes
-  assert(num_nodes < MAXNODES);
-
   while (1) {
     // Wait for a job on the queue
-    redisReply *reply = (redisReply*)redisCommand(c,"BRPOPLPUSH queue:jobs queue:running 0");
+    redisReply *reply = redisCmd(c,"BRPOPLPUSH queue:jobs queue:running 0");
 
     char job[101];
     strncpy(job, reply->str, 100);
@@ -125,34 +154,41 @@ int main(int argc, char *argv[]) {
     string result;
     bool no_result = false;
     switch (job[0]) {
+      // command for article links
       case 'D': {  // count distances from node
-#ifdef DEBUG
-        // Simulate slow processing
-        usleep(1000 * 100);
-#endif
-        int node = atoi(job+1);
+        node_t node = atoi(job+1);
         if (node < 1 || node > num_nodes) {
           result = "{\"error\":\"Node out of range\"}";
           break;
         }
-        if (IS_CATEGORY(node)) {
+        if (is_category.get_value(node)) {
           result = "{\"error\":\"Node is category\"}";
           break;
         }
-        vector<int> cntdist = get_distances(node);
-        result = "{\"count_dist\":" + to_json(cntdist) + "}";
+        vector<uint32_t> cntdist = art_graph.GetDistances(node);
+        result = "{\"count_dist\":" + util::to_json(cntdist) + "}";
       }
       break;
+      // command for article links
       case 'S': {  // Sizes of strongly connected components
-        vector<pii> components = scc_tarjan();
-        result = "{\"components\":" + to_json(components) + "}";
+        vector<pii> components = util::count_items(art_graph.Scc());
+        result = "{\"components\":" + util::to_json(components) + "}";
       }
       break;
-      case 'P': {  // PING 'Are you still there?' (in GLaDOS voice)
+      // command for article links
+      case 'R': {  // Page Rank
+        vector<pair<double, node_t> > rankp =
+          art_graph.PageRank(num_nodes, PAGERANK_RESULTS);
+        result = "{\"ranks\":" + util::to_json(rankp) + "}";
+      }
+      break;
+      // command
+      case 'P': {  // PING 'Are you still there?'
         result = "{\"still_alive\":\"This was a triumph.\"}";
       }
       break;
 #ifdef DEBUG
+      // command
       case '.': {  // Job that does not produce any result
         no_result = true;
         // Used to test a crashing client
@@ -165,13 +201,14 @@ int main(int argc, char *argv[]) {
     if (no_result)
       continue;
 
-    /* Set results */
-    reply = (redisReply*)redisCommand(c, "SETEX result:%s %d %b",
+    // Set results
+    reply = redisCmd(c, "SETEX result:%s %d %b",
         job, RESULTS_EXPIRE, result.c_str(), result.size());
     freeReplyObject(reply);
+    // Announcing must come after settings the results.
 
-    /* Announce the results to channel */
-    reply = (redisReply*)redisCommand(c,"PUBLISH announce:%s %b",
+    // Announce the results to channel
+    reply = redisCmd(c,"PUBLISH announce:%s %b",
         job, result.c_str(), result.size());
     freeReplyObject(reply);
 
@@ -183,5 +220,11 @@ int main(int argc, char *argv[]) {
   }
 
   return 0;
+}  // main
+
+}  // namespace wikigraph
+
+int main(int argc, char *argv[]) {
+  return wikigraph::main(argc, argv);
 }
 

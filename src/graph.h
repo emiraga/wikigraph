@@ -41,7 +41,7 @@ class BitArray {
   }
  private:
   uint32_t array_size() const {
-    return (size_+31)/32;
+    return (size_+31)/32;  // ceiling
   }
   uint32_t *array_;
   uint32_t size_;

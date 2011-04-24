@@ -14,6 +14,7 @@ Makefile
 run_tests
 gen_graph
 print_graph
+process_graph
 debug.sh
 core
 config.h

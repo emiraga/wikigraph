@@ -16,38 +16,7 @@ using ::testing::InSequence;
 
 namespace wikigraph {
 
-TEST(count_items, simple) {
-  uint32_t data[6] = {1, 2, 3, 4, 1, 3};
-  vector<uint32_t> vdata(data, data+6);
-  vector<pii> res = util::count_items(vdata);
-  ASSERT_EQ(4u, res.size());
-
-  ASSERT_EQ(1u, res[0].first);
-  ASSERT_EQ(2u, res[0].second);
-
-  ASSERT_EQ(2u, res[1].first);
-  ASSERT_EQ(1u, res[1].second);
-
-  ASSERT_EQ(3u, res[2].first);
-  ASSERT_EQ(2u, res[2].second);
-
-  ASSERT_EQ(4u, res[3].first);
-  ASSERT_EQ(1u, res[3].second);
-}
-
-TEST(to_json, VI) {
-  uint32_t data[6] = {1, 2, 3, 4, 1, 3};
-  vector<uint32_t> vdata(data, data+6);
-  ASSERT_EQ("[1,2,3,4,1,3]", util::to_json(vdata));
-}
-
-TEST(to_json, VPII) {
-  pii data[3] = {pii(1, 2), pii(3, 4), pii(1, 3)};
-  vector<pii> vdata(data, data+3);
-  ASSERT_EQ("[[1,2],[3,4],[1,3]]", util::to_json(vdata));
-}
-
-TEST(CompleteGraphAlgo, BFSsimple) {
+TEST(CompleteGraphAlgo, BFS_SCC_simple) {
   uint32_t data[10] = {
     1, 3,
     1,
@@ -60,7 +29,7 @@ TEST(CompleteGraphAlgo, BFSsimple) {
   };
   StubFile fs(data, sizeof(data));
   CompleteGraphAlgo algo(&fs);
-  algo.init();
+  algo.Init();
   vector<uint32_t> res;
   // node 1
   res = algo.GetDistances(1);
@@ -77,10 +46,11 @@ TEST(CompleteGraphAlgo, BFSsimple) {
   ASSERT_EQ(1u, res[0]);
   ASSERT_EQ(1u, res[1]);
 
-  vector<pii> res2 = algo.Scc();
-  ASSERT_EQ(1u, res2.size());
-  ASSERT_EQ(1u, res2[0].first);
-  ASSERT_EQ(3u, res2[0].second);
+  vector<uint32_t> res2 = algo.Scc();
+  ASSERT_EQ(3u, res2.size());
+  ASSERT_EQ(1u, res2[0]);
+  ASSERT_EQ(1u, res2[1]);
+  ASSERT_EQ(1u, res2[2]);
 }
 
 TEST(CompleteGraphAlgo, PageRankSimple) {
@@ -96,7 +66,7 @@ TEST(CompleteGraphAlgo, PageRankSimple) {
   };
   StubFile fs(data, sizeof(data));
   CompleteGraphAlgo algo(&fs);
-  algo.init();
+  algo.Init();
   vector<pair<double, node_t> > res;
 
   res = algo.PageRank(3, 1);
@@ -109,6 +79,12 @@ TEST(CompleteGraphAlgo, PageRankSimple) {
   ASSERT_EQ(3u, res[1].second);
 
   res = algo.PageRank(3, 3);
+  ASSERT_EQ(3u, res.size());
+  ASSERT_EQ(1u, res[0].second);
+  ASSERT_EQ(3u, res[1].second);
+  ASSERT_EQ(2u, res[2].second);
+
+  res = algo.PageRank(3, 1000);
   ASSERT_EQ(3u, res.size());
   ASSERT_EQ(1u, res[0].second);
   ASSERT_EQ(3u, res[1].second);

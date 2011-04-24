@@ -31,20 +31,17 @@ Try it yourself
 
 Without wikipedia dumps you can try how this works on a demo mediawiki database.
 Run a redis server on a localhost and default port.
-** WARNING ** : `gen_graph` will flush all existing keys from redis database,
-be carefull.
 
-	git clone https://emiraga@github.com/emiraga/wikigraph.git
-	cd wikigraph
+    git clone https://emiraga@github.com/emiraga/wikigraph.git
+    cd wikigraph
 
 Edit `src/config.h.in` if you would like to change some settings.
 
-  cmake src/
-	make
-	bin/generate_graph_debug
-	bin/process_graph_debug -f 1 #make one background worker
-	coffee analyze.coffee
-	<REDISPATH>redis-cli "keys s:*"
+    cmake src/
+    make
+    ./generate_graph
+    ./process_graph -f 1 #make one background worker
+    coffee analyze.coffee
 
 To do analysis of real wikipedia database, download dumps from [english wikipedia dumps page](http://dumps.wikimedia.org/enwiki/).  Optionally, you can extract those `*.sql.gz` files.
 
@@ -88,8 +85,8 @@ Dependencies
 Assumptions
 -----------
 * Least 1.5GB of RAM, since I have that much on my computer. Many things in this project would look different if I had more or less RAM on my computer.
-  At most 1.0GB is expected to be used by either redis or some programs from here.
-* Program is compiled and run as 32bit (Maybe 64bit works as well, I did not try it myself).
+  About 1.0GB-ish is expected to be used at a time.
+* Program is compiled and run as 32bit little-endian (Maybe 64bit works as well, I did not try it myself).
 * `pagelinks.sql` and `categorylinks.sql` are exported with sorting `mysqldump --order-by-primary`
 
 
@@ -116,6 +113,8 @@ articles.
 Keys `w:<wikiId>` keep values `a:<hash>` or `c:<hash>`. This is used for
 reverse lookup of hashes based on **wikiId**.
 
-Keys `s:*` store statistical data.
+Keys `n:<graphId>` store name of a category or article that is represented by
+this node. Values is either `a:<Name>` or `c:<Name>`.
 
+Keys `s:*` store statistical data and counts.
 

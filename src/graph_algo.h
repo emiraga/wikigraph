@@ -18,58 +18,6 @@
 
 namespace wikigraph {
 
-typedef std::pair<uint32_t, uint32_t> pii;
-
-#ifndef UINT32_MAX
-#define UINT32_MAX  (0xffffffff)
-#endif
-
-namespace util {
-
-vector<pii> count_items(vector<uint32_t> v) {
-  sort(v.begin(), v.end());
-  v.push_back(UINT32_MAX);
-
-  vector<pii> result;
-
-  int cnt = 0;
-  for (size_t i = 0; i < v.size(); i++) {
-    if (i && v[i-1] != v[i]) {
-      result.push_back(pii(v[i-1], cnt));
-      cnt = 1;
-    } else {
-      cnt++;
-    }
-  }
-  return result;
-}
-
-string to_json(const vector<uint32_t> &v) {
-  string msg = "[";
-  for (size_t i = 0; i < v.size(); i++) {
-    if (i) msg += ",";
-    char msgpart[20];
-    snprintf(msgpart, sizeof(msgpart), "%"PRIu32, v[i]);
-    msg += string(msgpart);
-  }
-  msg += "]";
-  return msg;
-}
-
-string to_json(const vector<pii> &v) {
-  string msg = "[";
-  for (size_t i = 0; i < v.size(); i++) {
-    if (i) msg += ",";
-    char msgpart[41];
-    snprintf(msgpart, sizeof(msgpart), "[%"PRIu32",%"PRIu32"]", v[i].first, v[i].second);
-    msg += string(msgpart);
-  }
-  msg += "]";
-  return msg;
-}
-
-}  // namespace util
-
 class CompleteGraphAlgo {
   static const int DIST_ARRAY = 100;  // threshold to use array for distances
  public:
@@ -78,7 +26,8 @@ class CompleteGraphAlgo {
     graph_.list = NULL;
     graph_.edges = NULL;
   }
-  void init() {
+
+  void Init() {
     assert(graph_.list == NULL);
     node_t tmp[2];
     // Read from back
@@ -102,6 +51,7 @@ class CompleteGraphAlgo {
     queue_ = new uint32_t[ graph_.num_nodes + 2];
     dist_ = new int32_t[ graph_.num_nodes + 2];
   }
+
   ~CompleteGraphAlgo() {
     if(graph_.edges)
       delete[] graph_.edges;
@@ -112,6 +62,7 @@ class CompleteGraphAlgo {
       delete[] dist_;
     }
   }
+
   vector<uint32_t> GetDistances(node_t start) {
     uint32_t dist_count[DIST_ARRAY] = {0};
     std::map<uint32_t, uint32_t> dist_count_m;
@@ -159,7 +110,7 @@ class CompleteGraphAlgo {
     return result;
   }
 
-  vector<pii> Scc() {  // Tarjan
+  vector<uint32_t> Scc() {  // Tarjan
     int tindex = 1;
     int top = -1;
     int top_scc = -1;
@@ -255,10 +206,11 @@ class CompleteGraphAlgo {
     free(stacknode);
     // free(stack);
 
-    return util::count_items(scc_result);
+    // return util::count_items(scc_result);
+    return scc_result;
   }
 
-  vector<pair<double, node_t> > PageRank(uint32 N, int how_many) {
+  vector<pair<double, node_t> > PageRank(uint32_t N, uint32_t how_many) {
     double *rank1 = new double[graph_.num_nodes + 2];
     double *rank2 = new double[graph_.num_nodes + 2];
 
@@ -295,11 +247,21 @@ class CompleteGraphAlgo {
     delete[] rank1;
     delete[] rank2;
 
+    how_many = std::min(how_many, N);
     std::partial_sort(ret.begin(), ret.begin() + how_many, ret.end(),
         std::greater< pair<double, node_t> >());
     ret.resize(how_many);
     return ret;
   }
+
+  uint32_t num_nodes() const {
+    return graph_.num_nodes;
+  }
+
+  uint32_t num_edges() const {
+    return graph_.num_edges;
+  }
+
  protected:
   void PowerIteration(uint32_t N, double dumping,
       double *rank_in, double *rank_out) {
@@ -318,6 +280,7 @@ class CompleteGraphAlgo {
       }
     }
   }
+
  private:
   File *file_;
   Graph graph_;

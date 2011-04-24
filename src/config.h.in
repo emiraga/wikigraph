@@ -23,3 +23,6 @@
 // and as a primitive caching mechanism.
 #define RESULTS_EXPIRE 60 // Seconds
 
+// How many top nodes to return
+#define PAGERANK_RESULTS 100
+

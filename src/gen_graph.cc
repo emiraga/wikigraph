@@ -7,7 +7,7 @@
 #include "config.h"
 #include "sql_parser.h"
 #include "file_io.h"
-#include "hiredis/hiredis.h"
+#include "redis.h"
 #include "hash.h"
 #include "graph.h"
 
@@ -55,18 +55,6 @@ struct WikiGraphInfo {
 } g_info;
 
 }  // namespace
-
-// For some reason redisCommand does not return redisReply*
-// Hiding this ugly syntax.
-// TODO(user): should I make interface for redis?
-redisReply* redisCmd(redisContext *c, const char *format, ...) {
-  va_list argptr;
-  va_start(argptr, format);
-  redisReply* reply = reinterpret_cast<redisReply*>(
-      redisvCommand(c, format, argptr));
-  va_end(argptr);
-  return reply;
-}
 
 class Stage {
  public:
@@ -797,6 +785,16 @@ int main(int argc, char *argv[]) {
   redisReply *reply;
   reply = wikigraph::redisCmd(redis, "SELECT %d", REDIS_DATABASE);
   freeReplyObject(reply);
+
+  printf("I am about to flush your redis database #%d\n", REDIS_DATABASE);
+  printf("Are you sure you want to continue? (y/n) ");
+  char choice[21];
+  scanf("%20s", choice);
+
+  if(choice[0] != 'y' && choice[0] != 'Y') {
+    redisFree(redis);
+    return 1;
+  }
 
   printf("Flushing database.\n");
   reply = wikigraph::redisCmd(redis, "FLUSHALL");

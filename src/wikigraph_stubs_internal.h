@@ -477,6 +477,12 @@ inline char* string_as_array(string* str) {
   return str->empty() ? NULL : &*str->begin();
 }
 
+#ifndef UINT32_MAX
+#define UINT32_MAX  (0xffffffff)
+#endif
+
+typedef std::pair<uint32_t, uint32_t> pii;
+
 }  // namespace wikigraph
 
 #endif  // SRC_WIKIGRAPH_STUBS_INTERNAL_H_
