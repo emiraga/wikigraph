@@ -45,7 +45,8 @@ Edit `src/config.h.in` if you would like to change some settings.
 
 To do analysis of real wikipedia database, download dumps from [english wikipedia dumps page](http://dumps.wikimedia.org/enwiki/).  Optionally, you can extract those `*.sql.gz` files.
 
-Edit `config.h` and compile binaries
+Edit `src/config.h.in` and compile binaries
+    cmake src/ DEBUG=1
     make
 
 Start redis server, preferably with unix socket `/tmp/redis.sock`. Generating graph is database-intensive operation, and unix socket will speed things up a bit. 

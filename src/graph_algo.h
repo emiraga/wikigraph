@@ -235,7 +235,7 @@ class CompleteGraphAlgo {
         delta += std::fabs(rank1[node] - rank2[node]);
       }
       std::cout << "Delta: " << delta << endl;
-      if (delta < 1e-15)
+      if (delta < 1e-4)
         break;
     }
 
