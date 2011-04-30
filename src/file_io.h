@@ -61,8 +61,8 @@ class SystemFile : public File {
   }
   // Only useful when reading files
   double get_progress() {
-    if(!file_size_)
-      file_size_ = file_size(); 
+    if (!file_size_)
+      file_size_ = file_size();
     return 100.0 * tell() / file_size_;
   }
  private:
@@ -112,7 +112,7 @@ class GzipFile : public File {
   }
   // Only useful when reading files
   double get_progress() {
-    if(!file_size_)
+    if (!file_size_)
       file_size_ = file_size();
     // To obtain current position in a file, we query file pointer
     // of the compressed file. There are many problems with this:
@@ -273,7 +273,7 @@ class BufferedReader : public FileReader<UnitType> {
   }
  private:
   void read_buffer() {
-    if(print_progress_) {
+    if (print_progress_) {
       printf(" %7.3lf%%\n", file_->get_progress());
     }
     read_size_ = file_->read(buffer_, sizeof(UnitType), kBufferSize);

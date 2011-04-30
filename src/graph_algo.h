@@ -21,7 +21,7 @@ namespace wikigraph {
 class CompleteGraphAlgo {
   static const int DIST_ARRAY = 100;  // threshold to use array for distances
  public:
-  CompleteGraphAlgo(File *file)
+  explicit CompleteGraphAlgo(File *file)
   : file_(file), queue_(NULL) {
     graph_.list = NULL;
     graph_.edges = NULL;
@@ -53,11 +53,11 @@ class CompleteGraphAlgo {
   }
 
   ~CompleteGraphAlgo() {
-    if(graph_.edges)
+    if (graph_.edges)
       delete[] graph_.edges;
-    if(graph_.list)
+    if (graph_.list)
       delete[] graph_.list;
-    if(queue_) {
+    if (queue_) {
       delete[] queue_;
       delete[] dist_;
     }
@@ -130,7 +130,7 @@ class CompleteGraphAlgo {
 
     vector<uint32_t> scc_result;
 
-    for (int k=1; k<=num_nodes; k++) {
+    for (int k = 1; k <= num_nodes; k++) {
 #ifdef DEBUG
       printf("processing node %d\n", k);
 #endif
@@ -161,17 +161,16 @@ class CompleteGraphAlgo {
           }
           for ( ; i < graph_.end(node) /* node_end_list(node) */; i++) {
             int dest = graph_.edges[i];
-            if (nodeindex[dest] == -1) { // Not visited
+            if (nodeindex[dest] == -1) {  // Not visited
               // Push dest to execution stack
               stacknode[++top] = dest;
               stackI[top] = -1;
               break;  // Original REF1 code
-            }
-            else if (instack[dest]) { //dest belongs to this component
+            } else if (instack[dest]) {  // does belongs to this component
               lowindex[node] = std::min(lowindex[node], lowindex[dest]);
             }
           }
-          if (i == graph_.end(node)) { // node_end_list(node)) {
+          if (i == graph_.end(node)) {  // node_end_list(node)) {
             if (lowindex[node] == nodeindex[node]) {
               // We found one component
               int count = 0;
@@ -186,7 +185,7 @@ class CompleteGraphAlgo {
 #ifdef DEBUG
                 printf(" %d", sccnode);
 #endif
-              } while(sccnode != node);
+              } while (sccnode != node);
 #ifdef DEBUG
               printf(" ]\n");
 #endif
@@ -220,12 +219,6 @@ class CompleteGraphAlgo {
     }
 
     while (true) {
-      double sum = 0.0;
-      for (node_t node = 1; node <= graph_.num_nodes; node++) {
-        sum += rank1[node];
-      }
-      std::cout << "Rank sum: " << sum << endl;
-
       PowerIteration(N, dumping, rank1, rank2);
       std::swap(rank1, rank2);
       // rank1 contains results
@@ -239,6 +232,12 @@ class CompleteGraphAlgo {
         break;
     }
 
+    double ranksum = 0.0;
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      ranksum += rank1[node];
+    }
+    std::cout << "Rank sum: " << ranksum << endl;
+
     vector<pair<double, node_t> > ret;
 
     for (node_t node = 1; node <= graph_.num_nodes; node++) {
@@ -251,6 +250,9 @@ class CompleteGraphAlgo {
     std::partial_sort(ret.begin(), ret.begin() + how_many, ret.end(),
         std::greater< pair<double, node_t> >());
     ret.resize(how_many);
+    for (size_t i = 0; i < ret.size(); i++) {
+      ret[i].first /= ranksum;
+    }
     return ret;
   }
 

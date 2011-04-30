@@ -68,9 +68,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Should be called before fork()'s to save memory (copy-on-write)  
+  // Should be called before fork()'s to save memory (copy-on-write)
   SystemFile f_art;
-  if(! f_art.open("artlinks.graph","rb")) {
+  if (!f_art.open("artlinks.graph", "rb")) {
     perror("fopen");
     exit(1);
   }
@@ -80,18 +80,18 @@ int main(int argc, char *argv[]) {
 
   // Load category links
   SystemFile f_cat;
-  if(!f_cat.open("catlinks.graph","rb")) {
+  if (!f_cat.open("catlinks.graph", "rb")) {
     perror("fopen");
     exit(1);
   }
   CompleteGraphAlgo cat_graph(&f_cat);
   cat_graph.Init();
   f_cat.close();
-  
+
   // Load bit array => is node a category
   BitArray is_category(art_graph.num_nodes()+1);
   SystemFile f_iscat;
-  if(!f_iscat.open("graph_nodeiscat.bin", "rb")) {
+  if (!f_iscat.open("graph_nodeiscat.bin", "rb")) {
     perror("fopen");
     exit(1);
   }
@@ -128,7 +128,8 @@ int main(int argc, char *argv[]) {
   uint32_t num_nodes = atoi(reply->str);
   freeReplyObject(reply);
 
-  if(num_nodes != art_graph.num_nodes() || num_nodes != cat_graph.num_nodes()) {
+  if (num_nodes != art_graph.num_nodes()
+      || num_nodes != cat_graph.num_nodes()) {
     fprintf(stderr, "Number of nodes mismatch.\n");
     exit(1);
   }
@@ -139,7 +140,7 @@ int main(int argc, char *argv[]) {
 
   while (1) {
     // Wait for a job on the queue
-    redisReply *reply = redisCmd(c,"BRPOPLPUSH queue:jobs queue:running 0");
+    redisReply *reply = redisCmd(c, "BRPOPLPUSH queue:jobs queue:running 0");
 
     char job[101];
     strncpy(job, reply->str, 100);
@@ -208,14 +209,14 @@ int main(int argc, char *argv[]) {
     // Announcing must come after settings the results.
 
     // Announce the results to channel
-    reply = redisCmd(c,"PUBLISH announce:%s %b",
+    reply = redisCmd(c, "PUBLISH announce:%s %b",
         job, result.c_str(), result.size());
     freeReplyObject(reply);
 
     if (is_parent) {
       time_t t_end = clock();
-      printf("Time to complete %.5lf: %s\n", 
-          double(t_end - t_start)/CLOCKS_PER_SEC, result.c_str());
+      printf("Time to complete %.5lf: %s\n",
+          static_cast<double>(t_end - t_start)/CLOCKS_PER_SEC, result.c_str());
     }
   }
 

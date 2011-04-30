@@ -58,6 +58,7 @@ struct WikiGraphInfo {
 
 class Stage {
  public:
+  virtual ~Stage() {}
   virtual void main(redisContext *redis) = 0;
   virtual void finish(redisContext *redis) = 0;
 };
@@ -288,7 +289,7 @@ void PageHandlerNames::data(const vector<string> &data) {
   if (!is_redir) {
     uint32_t graphId = g_wikigraphId[wikiId];
     redisReply *reply;
-    reply = redisCmd(redis_, "SET n:%d %s%s", graphId, prefix, title);//
+    reply = redisCmd(redis_, "SET n:%d %s%s", graphId, prefix, title);
     freeReplyObject(reply);
   }
 }  // DataHandlerNames::data
@@ -791,7 +792,7 @@ int main(int argc, char *argv[]) {
   char choice[21];
   scanf("%20s", choice);
 
-  if(choice[0] != 'y' && choice[0] != 'Y') {
+  if (choice[0] != 'y' && choice[0] != 'Y') {
     redisFree(redis);
     return 1;
   }
@@ -810,7 +811,7 @@ int main(int argc, char *argv[]) {
   stages.push_back(new wikigraph::stage6::Stage6());
 
   // Run though stages
-  for (int i = 0; i < int(stages.size()); i++) {
+  for (size_t i = 0; i < stages.size(); i++) {
     printf("Starting stage %d\n", i+1);
     stages[i]->main(redis);
   }
@@ -820,7 +821,7 @@ int main(int argc, char *argv[]) {
   freeReplyObject(reply);
 
   printf("Finalizing.\n");
-  for (int i = 0; i < int(stages.size()); i++) {
+  for (size_t i = 0; i < stages.size(); i++) {
     stages[i]->finish(redis);
     delete stages[i];
   }

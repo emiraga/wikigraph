@@ -63,7 +63,8 @@ string to_json(const vector<pii> &v) {
   for (size_t i = 0; i < v.size(); i++) {
     if (i) msg += ",";
     char msgpart[41];
-    snprintf(msgpart, sizeof(msgpart), "[%"PRIu32",%"PRIu32"]", v[i].first, v[i].second);
+    snprintf(msgpart, sizeof(msgpart), "[%"PRIu32",%"PRIu32"]",
+        v[i].first, v[i].second);
     msg += string(msgpart);
   }
   msg += "]";
@@ -75,7 +76,8 @@ string to_json(const vector<pair<double, node_t> > &v) {
   for (size_t i = 0; i < v.size(); i++) {
     if (i) msg += ",";
     char msgpart[41];
-    snprintf(msgpart, sizeof(msgpart), "[%lf,%"PRIu32"]", v[i].first, v[i].second);
+    snprintf(msgpart, sizeof(msgpart), "[%lf,%"PRIu32"]",
+        v[i].first, v[i].second);
     msg += string(msgpart);
   }
   msg += "]";
