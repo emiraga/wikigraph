@@ -176,6 +176,16 @@ int main(int argc, char *argv[]) {
         result = "{\"components\":" + util::to_json(components) + "}";
       }
       break;
+      // command for article nodes
+      case 'I': {  // Degree info
+        node_t node = atoi(job+1);
+        pii degrees = art_graph.DegreeInfo(node);
+        char msg[50];
+        snprintf(msg, sizeof(msg), "{\"in_degree\":%"PRIu32",\"out_degree\":%"PRIu32"}",
+            degrees.first, degrees.second);
+        result = string(msg);
+      }
+      break;
       // command for article links
       case 'R': {  // Page Rank
         vector<pair<double, node_t> > rankp =

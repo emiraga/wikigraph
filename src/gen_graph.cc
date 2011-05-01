@@ -49,7 +49,7 @@ uint32_t g_wikigraphId[MAX_WIKI_PAGEID+1];
 struct WikiGraphInfo {
   int graph_nodes_count, article_count, category_count;
   int art_redirect_count, cat_redirect_count;
-  int article_links_count, pagelink_rows_count;
+  int article_links_count;
   int skipped_catlinks, skipped_fromcat_links;
   int category_links_count;
 } g_info;
@@ -61,6 +61,9 @@ class Stage {
   virtual ~Stage() {}
   virtual void main(redisContext *redis) = 0;
   virtual void finish(redisContext *redis) = 0;
+  // Between invocations of 'main' and 'finish', redis database is flushed.
+  // Stage should save data temporary data in 'main' invocation,
+  // but permanent save is from 'finish' invocation.
 };
 
 /**************
@@ -112,6 +115,7 @@ class PageHandlerNames : public PageHandler {
  public:
   explicit PageHandlerNames(redisContext *redis)
   : PageHandler(redis) { }
+  void init() {}  // don't write nodeiscat.bin
   void data(const vector<string> &data);
  private:
   DISALLOW_COPY_AND_ASSIGN(PageHandlerNames);
@@ -463,7 +467,7 @@ class PageLinkHandler : public DataHandler {
 class Stage3 : public Stage {
  public:
   void main(redisContext *redis) {
-    g_info.article_links_count = g_info.pagelink_rows_count = 0;
+    g_info.article_links_count = 0;
     g_info.skipped_catlinks = g_info.skipped_fromcat_links = 0;
 
     PageLinkHandler data_handler(redis);
@@ -510,7 +514,6 @@ class Stage3 : public Stage {
 
 // mysql table 'pagelink'
 void PageLinkHandler::data(const vector<string> &data) {
-  g_info.pagelink_rows_count++;
   int wikiId = atoi(data[pl_from].c_str());
 
   // Check if this page exists and is regular (not redirect)
@@ -553,6 +556,7 @@ void PageLinkHandler::data(const vector<string> &data) {
       from_graphId, wikiId, prefix, title, to_graphId,
       g_wikistatus[to_graphId].type);
 #endif
+    g_info.article_links_count++;
     graph_->add_edge(to_graphId);
   }
   freeReplyObject(reply);

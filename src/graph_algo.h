@@ -256,6 +256,23 @@ class CompleteGraphAlgo {
     return ret;
   }
 
+  pii DegreeInfo(node_t info_node) {
+    uint32_t out_degree = graph_.end(info_node) - graph_.start(info_node);
+    uint32_t in_degree = 0u;
+
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      node_t *target = &graph_.edges[graph_.start(node)];
+      node_t *end = &graph_.edges[graph_.end(node)];
+      for ( ; target < end; target++) {
+        // link is from (node) to (*target)
+        if(*target == info_node) {
+          in_degree++;
+        }
+      }
+    }
+    return pii(in_degree, out_degree);
+  }
+
   uint32_t num_nodes() const {
     return graph_.num_nodes;
   }

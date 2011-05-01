@@ -40,6 +40,7 @@ CREATE TABLE `categorylinks` (
 
 LOCK TABLES `categorylinks` WRITE;
 /*!40000 ALTER TABLE `categorylinks` DISABLE KEYS */;
+INSERT INTO `categorylinks` VALUES (2,'Pages_with_P_prefix','P1','2011-04-30 09:05:31'),(3,'Pages_with_P_prefix','P2','2011-04-30 09:05:50'),(4,'Pages_with_P_prefix','P3','2011-04-30 09:06:00'),(5,'Pages_with_P_prefix','P4','2011-04-30 09:06:09');
 /*!40000 ALTER TABLE `categorylinks` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -52,4 +53,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2011-04-30  7:20:40
+-- Dump completed on 2011-05-01  8:55:21

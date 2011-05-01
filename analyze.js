@@ -1,8 +1,11 @@
 var assert = require('assert');
+var redisnode = require("redis-node");
+var fs = require("fs");
 
 // {{{ config
 var WAIT_SECONDS = 1; // for jobs to complete
 var KEEP_CLOSEST = 100; // articles
+var RANDOM_ARTICLES = 100; // Randomly sample X articles, put 0 for all articles
 // }}}
 
 // {{{ tmpl - micro-templates for javascript
@@ -121,6 +124,9 @@ Heap.prototype._moveDown = function(index) {
 function ReportData() {
   this.num_nodes = 0;
   this.num_articles = 0;
+  this.num_artlinks = 0;
+  this.num_categories = 0;
+  this.num_catlinks = 0;
   this.largest_scc = 0;  // cut-off point for closeness calculation
   this.articles_done = 0;
   this.reachable_sum = 0;
@@ -128,6 +134,7 @@ function ReportData() {
   this.onevent = {all_done:function(){}};
   this.keep_closest = KEEP_CLOSEST;
   this.closest = new Heap();
+  this.interesting_nodes = [];
 };
 ReportData.prototype.on = function(name, cb) {
   this.onevent[name] = cb;
@@ -180,7 +187,11 @@ ReportData.prototype.AddArticle = function(node, count_dist) {
     }
   }
 
-  if(this.articles_done == this.num_articles) {
+  if(!this.sample_size) {
+    throw new Error("sample size is not set");
+  }
+
+  if(this.articles_done == this.sample_size) {
     this.onevent['all_done'](); // Call event
   };
 };
@@ -268,9 +279,9 @@ Controller.prototype._RunJob = function(job, callback) {
 Controller.prototype.RunJob = function(job, callback) {
   // Results are cached, check that first
   var _this = this;
-  this.redis.get('redis:'+job, function(err, result) {
+  this.redis.get('result:'+job, function(err, result) {
     if(err) throw err;
-    if(result) {
+    if (result) {
       callback(job, JSON.parse(result));
     } else {
       // Result is not in cache, issue a new job
@@ -278,23 +289,25 @@ Controller.prototype.RunJob = function(job, callback) {
     }
   });
 };
-Controller.prototype.JobsForAllNodes = function(graph, command) {
+Controller.prototype.JobsForNodes = function(num_nodes, command, map) {
   var node = 0;
-  var nodes = graph.num_nodes;
   // Slow-start
   var bulksize = 5;
   var granul = 2;
   var _this = this;
+  
+  map = map || function(i) { return i; };
 
   var insert_bulk = function() {
     _this.redis.llen('queue:jobs', function(err, len) {
       if (err) throw err;
-      var percent = (100*(node-len)/nodes).toFixed(4);
+      var percent = (100*(node-len)/num_nodes).toFixed(4);
       console.log(percent+'%  queue:jobs len is '+len+' bulksize '+bulksize);
       if (len < bulksize || len < granul) {
         bulksize += granul;
-        for(var i=1; i<= bulksize; i++) {
-          _this.redis.lpush('queue:jobs', command+(node+i));
+        var endpoint = Math.min(num_nodes, node + bulksize);
+        for(var i=node+1; i<= endpoint; i++) {
+          _this.redis.lpush('queue:jobs', command + map(i));
         }
         node += bulksize;
       } else {
@@ -302,10 +315,10 @@ Controller.prototype.JobsForAllNodes = function(graph, command) {
           bulksize -= granul;
         }
       }
-      if (node < nodes || len > 0) {
+      if (node < num_nodes || len > 0) {
         setTimeout(insert_bulk, 1000);
       } else {
-        node = nodes;
+        node = num_nodes;
         console.log('All jobs are inserted into the queue.');
       }
     });
@@ -325,16 +338,51 @@ Controller.prototype.ResolveNames = function(total, cb_get_node, cb_set_name, cb
       return function(err, name) {
         if (err) throw err;
         if (!name) throw new Error("Invalid article name");
+
+        //Transform to wiki format
+        if(name.substr(0,2) == 'a:') {
+          name = name.substr(2);
+        } else if(name.substr(0,2) == 'c:') {
+          name = "Category:"+name.substr(2);
+        }
         cb_set_name(_i, name);
         resolved += 1;
-        if (resolved == total)
+        if (resolved == total) {
           cb_done();
+        }
+      }
+    })());
+  }
+};
+Controller.prototype.ResolveInfo = function(total, cb_get_node, cb_set_info, cb_done) {
+  if(!total) {
+    cb_done();
+  }
+  var resolved = 0;
+  var _this = this;
+  // Resolve names of articles given list of nodes
+  for (var i = 0; i < total; i++) {
+    var node = cb_get_node(i);
+    this.RunJob("I" + node, (function(){
+      var _i = i; 
+      var _node = node;
+      return function(job, result) {
+        if(result.error) throw result.error;
+        _this.RunJob("D"+_node, function(job, dist) {
+          if(!dist.error) {
+            // Categories will report error, do this only for articles
+            cb_set_info(_i, result.in_degree, result.out_degree, dist.count_dist);
+          }
+          resolved += 1;
+          if (resolved == total) {
+            cb_done();
+          }
+        });
       }
     })());
   }
 };
 // }}}
-
 
 // {{{ class Mutex
 function Mutex(redis) {
@@ -381,6 +429,56 @@ Mutex.prototype._incr = function() {
 };
 // }}}
 
+// {{{ class Processing
+function Processing() {
+  this.jobs = Array.prototype.slice.call(arguments);
+}
+Processing.prototype.run = function(i) {
+  i = i || 0;
+  var jobs = this.jobs;
+  if(i >= jobs.length) {
+    return;
+  }
+  var _this = this;
+  this._parallel(jobs[i], function() {
+    _this.run(i+1);
+  });
+}
+Processing.prototype._parallel = function(jobs, callback) {
+  var total = jobs.length;
+  if(!total) {
+    callback();
+  }
+  var processed = 0;
+  for(var i = 0; i < total; i++) {
+    jobs[i](function() {
+      processed += 1;
+      if(processed == total) {
+        callback();
+      }
+    });
+  }
+};
+// }}}
+
+// {{{ class GroupPermutation
+function GroupPermutation(n) {
+  this.n = n;
+  this.s = 1 + Math.floor(Math.random()*n);
+  while(this._gcd(this.s, this.n) != 1) {
+    this.s += 1;
+  }
+}
+GroupPermutation.prototype._gcd = function(a,b) {
+  if(b == 0)
+    return a;
+  return this._gcd(b, a%b);
+};
+GroupPermutation.prototype.get = function(i) {
+  return ((i-1)*this.s)%this.n + 1;
+};
+// }}}
+
 // {{{ test Heap
 (function(){
   var h = new Heap();
@@ -397,12 +495,26 @@ Mutex.prototype._incr = function() {
 })();
 // }}}
 
+// {{{ test GroupPermutation
+(function(){
+  for(var n = 1; n <= 100; n++) {
+    var p = new GroupPermutation(n);
+    var o = [];
+    for(var i=1;i<=n;i++) {
+      o.push(p.get(i));
+    }
+    o = o.sort(function(a,b){return a-b;});
+    for(var i=1;i<=n;i++) {
+      assert.strictEqual(o[i-1], i);
+    }
+  }
+})();
+
 function d() {
   console.log(arguments);
 }
 
 function main() {
-  var redisnode = require("redis-node");
   var redis = redisnode.createClient(); // used for non-blocking commands
   var redis_block = redisnode.createClient(); // used for blocking command blpop
   var redis_pubsub = redisnode.createClient(); // used for pub/sub messages
@@ -412,52 +524,60 @@ function main() {
   var control = new Controller(redis, redis_pubsub);  // pubsub can't be mixed with regular ops
   var monitor = new JobMonitor(redis, redis_block);  // blpop is blocking operation
   monitor.Start();
-  var interesting_nodes = [];
 
-  var init_steps = 4;
+  // Init step 0 - start mutex
+  var init_mutex = function(callback) {
+    mutex.Start(callback);
+  };
 
   // Init step 1 - get counts
-  redis.mget("s:count:Graph_nodes", "s:count:Articles", function(err, result) {
-    data.num_nodes = parseInt(result[0], 10);
-    data.num_articles = parseInt(result[1], 10);
-    after_init();
-  });
+  var init_get_counts = function(callback) {
+    redis.mget("s:count:Graph_nodes", "s:count:Articles", 
+        "s:count:Article_links", "s:count:Categories",
+        "s:count:Category_links",
+    function(err, result) {
+      data.num_nodes = parseInt(result[0], 10);
+      data.num_articles = parseInt(result[1], 10);
+      data.num_artlinks = parseInt(result[2], 10);
+      data.num_categories = parseInt(result[3], 10);
+      data.num_catlinks = parseInt(result[4], 10);
+      callback();
+    });
+  };
+
   // Init step 2 - compute SCC
-  control.RunJob('S', function(job, result) {
-    data.SetSCC(result.components);
-    after_init();
-  });
+  var init_compute_scc = function(callback) {
+    control.RunJob('S', function(job, result) {
+      data.SetSCC(result.components);
+      callback();
+    });
+  };
+
   // Init step 3 - get PageRanks
   //monitor.waittime_job['R'] = 30 * 1000; // this job may take longer time than normal
-  control.RunJob('R', function(job, result) {
-    var ranks = result.ranks;
-    for(var i = 0; i < ranks.length; i++) {
-      interesting_nodes.push(ranks[i][0]);
-    }
-    control.ResolveNames(ranks.length, 
-      function get(i) {
-        return ranks[i][1];
-      },
-      function set(i, name) {
-        ranks[i][2] = name;
-      },
-      function done() {
-        data.SetPageRanks(ranks);
-        after_init();
+  var init_compute_pageranks = function(callback) {
+    control.RunJob('R', function(job, result) {
+      var ranks = result.ranks;
+      for(var i = 0; i < ranks.length; i++) {
+        data.interesting_nodes.push({node:ranks[i][1]});
       }
-    );
-  });
-  // Init step 4 - init mutex
-  mutex.Start(function(){
-    after_init();
-  });
+      control.ResolveNames(ranks.length, 
+        function get(i) {
+          return ranks[i][1];
+        },
+        function set(i, name) {
+          ranks[i][2] = name;
+        },
+        function done() {
+          data.SetPageRanks(ranks);
+          callback();
+        }
+      );
+    });
+  };
 
-  var after_init = function() {
-    init_steps -= 1;
-    if (init_steps) return; // still data to come.
-
-    // Initial data was fetched, moving on.
-    console.log("Init complete.");
+  var compute_article_distances = function(callback) {
+    assert.strictEqual(data.articles_done, 0);
 
     // Calculate count of distance between articles
     monitor.on('job_complete', function(job, result) {
@@ -473,24 +593,39 @@ function main() {
       data.AddArticle(node, r.count_dist);
     });
 
-    data.on('all_done', after_artdist);  // Articles
+    data.on('all_done', callback);  // Articles
 
-    control.JobsForAllNodes(data, 'D');
+    if(!RANDOM_ARTICLES || RANDOM_ARTICLES >= data.num_nodes) {
+      // Process every node
+      data.sample_size = data.num_articles;
+      control.JobsForNodes(data.num_nodes, 'D');
+    } else {
+      // Randomly select RANDOM_ARTICLES from a list
+      data.sample_size = RANDOM_ARTICLES;
+      var rand = new GroupPermutation(data.num_nodes);
+      control.JobsForNodes(RANDOM_ARTICLES, 'D', function(i) {
+        return rand.get(i);
+      });
+    }
   };
 
-  var after_artdist = function() {
+  var centr_articles = function(callback) {
     // Prepare article distance centers for report
     var pos = data.closest.size();
     data.close_centr = [];
     while(pos) {
       var heapnode = data.closest.remove();
       pos -= 1;
+      data.interesting_nodes.push({node:heapnode.value});
       data.close_centr[pos] = {
         node:heapnode.value,
         avg_dist: - heapnode.key
       };
     }
-
+    callback();
+  };
+  
+  var resolve_centr_names = function(callback) {
     control.ResolveNames(data.close_centr.length,
       function get(i) {
         return data.close_centr[i].node;
@@ -498,34 +633,105 @@ function main() {
       function set(i, name) {
         data.close_centr[i].name = name;
       },
-      function done(i) {
-        fini();
+      callback
+    );
+  }
+
+  var simplify_interesing = function(callback) {
+    var list = data.interesting_nodes;
+
+    list = list.sort(function (a, b) { return a.node - b.node; });
+    var ret = [list[0]];
+    for (var i = 1; i < list.length; i++) {
+      if (list[i-1].node !== list[i].node) {
+        ret.push(list[i]);
       }
+    }
+    data.interesting_nodes = ret;
+    callback();
+  };
+
+  var resolve_interesting_names = function(callback) {
+    control.ResolveNames(data.interesting_nodes.length,
+      function get(i) {
+        return data.interesting_nodes[i].node;
+      },
+      function set(i, name) {
+        data.interesting_nodes[i].name = name;
+      },
+      callback
     );
   };
 
-  var fini = function() {
+  var resolve_interesting_info = function(callback) {
+    control.ResolveInfo(data.interesting_nodes.length,
+      function get(i) {
+        return data.interesting_nodes[i].node;
+      },
+      function set(i, in_degree, out_degree, count_dist) {
+        var node_data = data.interesting_nodes[i]
+
+        // For categories, this function will not be called
+        node_data.is_article = true;
+        
+        node_data.in_degree = in_degree;
+        node_data.out_degree = out_degree;
+        node_data.count_dist = count_dist;
+        node_data.max_dist = Math.max.apply(null, count_dist);
+
+        node_data.reachable = 0;
+        node_data.distance = 0;
+        for (var d = 1, _len = count_dist.length; d < _len; d++) {
+          var count = count_dist[d];
+          node_data.reachable += count;
+          node_data.distance += count * d;
+        }
+      },
+      callback
+    );
+  };
+
+  var stop_and_close = function(callback) {
     monitor.Stop();
     mutex.Stop();
 
     redis.close();
     redis_block.close();
     redis_pubsub.close();
-    console.log("Finished, waiting for timeouts.");
     console.log(data);
 
+    callback();
+  };
 
-    var fs = require("fs");
-    fs.readFile('./index.tpl', 'utf8', function(err, index_tpl) {
+  var write_report = function(callback) {
+    // Write out the report
+    fs.readFile('report/index.tpl', 'utf8', function(err, index_tpl) {
       if (err) throw err;
-      console.log(tmpl(index_tpl, 
-        {users:[
-          {url:'url1', name:'name1' },
-          { url:'url2',name:'name2' }
-        ]}
-      ));
+      data.enwiki = "http://en.wikipedia.org/wiki/";
+      var cont = tmpl(index_tpl, data);
+      fs.writeFile('report/index.html', cont, function (err) {
+        if (err) throw err;
+        callback();
+      });
     });
-  }
+  };
+
+  // Complete description of report generation process
+  var process = new Processing(
+
+      [init_mutex, init_get_counts, init_compute_scc, init_compute_pageranks],
+
+      [compute_article_distances],
+
+      [centr_articles],
+      
+      [resolve_centr_names, simplify_interesing],
+
+      [resolve_interesting_names, resolve_interesting_info],
+
+      [stop_and_close, write_report]
+  );
+  process.run();
 };
 
 main();
