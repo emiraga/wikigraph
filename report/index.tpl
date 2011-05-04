@@ -18,9 +18,9 @@
     .description { font-size: 1.2em; margin-bottom: 30px; margin-top: -1px; font-style: italic;}
     .download { float: right; }
     pre { background: #000; color: #fff; padding: 15px;}
-    hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
+    hr { border: 0; width: 100%; border-bottom: 1px solid #000}
     .footer { text-align:center; padding-top:30px; font-style: italic; }
-    p { line-height: 25px; }
+    p { line-height: 25px; text-align: justify; }
     .nodeinfo { 
       border: 1px solid black;
       width: 440px; height 20px; background-color: white; padding:0px 5px 0px 5px;
@@ -42,6 +42,7 @@
     /*.nodeinfo img { margin-left: -10px; }*/
     tr:hover { background-color: #c7cbee; }
     .imglabel { text-align: center; font-size: 14px; }
+    img.figure { border: 1px solid black; }
   </style>
   <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
 </head>
@@ -62,7 +63,7 @@
     -->
 
     <h1><a href="http://github.com/emiraga/wikigraph">wikigraph</a>
-      <span class="small">by <a href="http://github.com/emiraga">emiraga</a></span></h1>
+      <span class="small">by <a href="https://github.com/emiraga">emiraga</a></span></h1>
 
     <div class="description">
       English Wikipedia as graph.
@@ -98,7 +99,7 @@
       For instance, article "Penny Can" has 3 outgoing <u>article links</u> and 2 <u>category links</u>. Former are directed whereas latter are undirected.
       Each article or category is one <u>node</u> in a graph.
     </p>
-    <img src="http://i.imgur.com/iCJx9.png" />
+    <img class="figure" src="http://i.imgur.com/iCJx9.png" />
     <div class="imglabel">Sample node with 3 article and 2 category links.</div>
 
     <h2>Article PageRank</h2>
@@ -138,7 +139,7 @@
 
     <h2>Minimum distance between articles</h2>
  
-    This data is based on random sampling of <%=art.nodes_done%> (<%=(100*art.nodes_done/art.num_nodes).toFixed(1)%>%) articles.
+    This data is based on random sampling of <%=art.nodes_done%> (<%=(100*art.nodes_done/art.num_nodes).toFixed(1)%>%) nodes.
 
     <table border="0" width="400px">
       <tbody>
@@ -147,11 +148,35 @@
       </tbody>
     </table>
 
+    <p>Distance between articles following only article links:</p>
+
+    <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,art.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=art.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
+    <div class="imglabel">Distance spectrum (article links).</div>
+
+    <hr />
+
+    <h2>Category links: Minimum distance</h2>
+ 
+    This data is based on random sampling of <%=cat.nodes_done%> (<%=(100*cat.nodes_done/cat.num_nodes).toFixed(1)%>%) nodes.
+
+    <table border="0" width="400px">
+      <tbody>
+        <tr><th>Average reachable nodes<td><%= (cat.reachable_sum / cat.nodes_done ).toFixed(2) %></th></tr>
+        <tr><th>Average distance<td><%= (cat.distance_sum / cat.reachable_sum ).toFixed(2) %></th></tr>
+      </tbody>
+    </table>
+
+    <p>Distance between nodes following only category links:</p>
+    <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,cat.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=cat.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
+    <div class="imglabel">Distance spectrum (category links).</div>
+
+    <hr />
+
     <h2>Interactive</h2>
 
     <p>
       I don&#39;t have public server to host a web service. However, there are 
-      <a href="http://en.wikipedia.org/wiki/Wikipedia:Six_degrees_of_Wikipedia#External_links">other tools</a> available.
+      <a href="http://en.wikipedia.org/wiki/Wikipedia:Six_degrees_of_Wikipedia#External_links">other tools</a> available for computing minimum distance.
     </p>
 
     <h2>Download</h2>
@@ -187,7 +212,7 @@
         <h3><%=info.name%></h3>
         <div class="left">
           <p><b>Articles</b> at a particular distance:</p>
-          <img src="http://chart.apis.google.com/chart?chds=0,<%=info.art.max_dist%>&chxt=x,y&chxr=1,0,<%=info.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.art.count_dist.join(",")%>" />
+          <img src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=info.art.max_dist%>&chxt=x,y&chxr=1,0,<%=info.art.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.art.count_dist.join(",")%>" />
           <p>Incoming article links: <%=info.art.in_degree%></p>
           <p>Outgoing article links: <%=info.art.out_degree%></p>
           <p>Rachable articles: <%=info.art.stat.reachable%></p>
@@ -196,7 +221,7 @@
         <div class="right">
           <p><b>Category links</b></p>
           <p>Nodes at a particular distance:</p>
-          <img src="http://chart.apis.google.com/chart?chds=0,<%=info.cat.max_dist%>&chxt=x,y&chxr=1,0,<%=info.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.cat.count_dist.join(",")%>" />
+          <img src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=info.cat.max_dist%>&chxt=x,y&chxr=1,0,<%=info.cat.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.cat.count_dist.join(",")%>" />
           <p>Category links: <%=info.cat.in_degree%></p>
           <p>Rachable nodes: <%=info.cat.stat.reachable%></p>
           <p>Average distance: <%=(info.cat.stat.closeness).toFixed(4)%></p>

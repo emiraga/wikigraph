@@ -139,7 +139,8 @@ Heap.prototype._moveDown = function(index) {
 
 // {{{ class GraphInfo
 // 
-// Usually, there are two instances of GraphInfo for article links and category links.
+// Usually, there are two instances of GraphInfo:
+//  for article links and category links.
 //
 function GraphInfo(type) {
   this.type = type || '';
@@ -153,6 +154,7 @@ function GraphInfo(type) {
   this.closest = new Heap();
   this.onevent = {all_done:function(){}};
   this.keep_closest = KEEP_CLOSEST;
+  this.dist_spectrum = [];
 }
 GraphInfo.prototype.on = function(name, cb) {
   this.onevent[name] = cb;
@@ -190,7 +192,7 @@ GraphInfo.prototype.CalcAvgDistReachable = function(count_dist) {
   return {
     distances:distances,
     reachable:reachable,
-    closeness:distances / reachable
+    closeness:distances / Math.max(reachable,1)  // avoid division by zero
   };
 };
 GraphInfo.prototype.AddInvalidNode = function(node, count_dist) {
@@ -198,12 +200,23 @@ GraphInfo.prototype.AddInvalidNode = function(node, count_dist) {
   this.nodes_done += 1;
 };
 GraphInfo.prototype.AddNodeDist = function(node, count_dist) {
-  var obj = this.CalcAvgDistReachable(count_dist);
+
+  // Add to spectrum
+  for (var dist = 0, _len = count_dist.length; dist < _len; dist++) {
+    var count = count_dist[dist];
+    if (this.dist_spectrum[dist]) {
+      this.dist_spectrum[dist] += count;
+    } else {
+      this.dist_spectrum[dist] = count;
+    }
+  }
 
   if (this.largest_scc == 0) {
     throw new Error("scc must be computed before adding articles");
   }
 
+  // Accumulate values
+  var obj = this.CalcAvgDistReachable(count_dist);
   this.nodes_done += 1;
   this.distance_sum += obj.distances;
   this.reachable_sum += obj.reachable;
@@ -599,10 +612,10 @@ function main(opts) {
   var mutex = new Mutex(redis);
   var control = new Controller(redis, redis_pubsub);  // pubsub can't be mixed with regular ops
   var monitor = new JobMonitor(redis, redis_block);  // blpop is blocking operation
-  monitor.Start();
 
   // Init step 0 - start mutex
-  var init_mutex = function(callback) {
+  var init_mutex_monitor = function(callback) {
+    monitor.Start();
     mutex.Start(callback);
   };
 
@@ -780,14 +793,16 @@ function main(opts) {
     };
   };
 
-  var stop_and_close = function(callback) {
-    monitor.Stop();
+  var stop_mutex_monitor = function(callback) {
     mutex.Stop();
+    monitor.Stop();
+    callback();
+  };
 
+  var redis_close = function(callback) {
     redis.close();
     redis_block.close();
     redis_pubsub.close();
-    console.log(data);
 
     callback();
   };
@@ -797,6 +812,7 @@ function main(opts) {
     fs.readFile('report/index.tpl', 'utf8', function(err, index_tpl) {
       if (err) throw err;
       data.enwiki = "http://en.wikipedia.org/wiki/";
+      console.log(data);
       var cont = tmpl(index_tpl, data);
       fs.writeFile('report/index.html', cont, function (err) {
         if (err) throw err;
@@ -805,10 +821,35 @@ function main(opts) {
     });
   };
 
+  var save_state = function(callback) {
+    fs.writeFile('report/state.json', JSON.stringify(data), function (err) {
+      if (err) throw err;
+      callback();
+    });
+  }
+
+  var load_state = function(callback) {
+    fs.readFile('report/state.json', 'utf8', function(err, state) {
+      if (err) throw err;
+      data = JSON.parse(state);
+      callback();
+    });
+  }
+
+  if (opts.load) {
+    // Alternative process, previous data is loaded from state file
+    var process = new Processing(
+      [load_state],
+      [write_report, redis_close]
+    );
+    process.run();
+    return;
+  }
+
   // Complete description of report generation process
   var process = new Processing(
 
-      [init_mutex, init_get_counts, init_compute_art_scc, init_compute_cat_scc, 
+      [init_mutex_monitor, init_get_counts, init_compute_art_scc, init_compute_cat_scc, 
         gen_compute_pageranks('a','art'), gen_compute_pageranks('c','cat')],
 
       [gen_compute_distances('a','art', RANDOM_ARTICLES)],
@@ -821,7 +862,7 @@ function main(opts) {
       
       [gen_resolve_interesting('a','art'), gen_resolve_interesting('c','cat')],
 
-      [stop_and_close, write_report]
+      [redis_close, stop_mutex_monitor, write_report, save_state]
   );
   process.run();
 };
@@ -973,6 +1014,10 @@ var opts = tav.set({
   port: {
     note: 'Redis port',
     value: 6379
+  },
+  load: {
+    note: 'Load data from previous run',
+    value: false
   }
 });
 
