@@ -14,6 +14,8 @@
 // In wiki dumps maximum expected pageid
 #define MAX_WIKI_PAGEID 35000000  // current value is 30480288
 
+#define MAX_NODEID 5000000
+
 // While transposing a graph, how much nodes with edges (linked list)
 // can we keep in memory. This is a tradeoff between memory and speed.
 #define NODES_PER_PASS (1000 * 1000)

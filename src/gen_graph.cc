@@ -54,6 +54,8 @@ struct WikiGraphInfo {
   int category_links_count;
 } g_info;
 
+bool g_nodeIsCat[MAX_NODEID];
+
 }  // namespace
 
 class Stage {
@@ -211,16 +213,18 @@ void PageHandler::data(const vector<string> &data) {
   const char *prefix;
   if (namespc == NS_MAIN) {  // Articles
     prefix = "a:";
-    if (is_redir)
+    if (is_redir) {
       g_info.art_redirect_count++;
-    else
+    } else {
       g_info.article_count++;
+    }
   } else if (namespc == NS_CATEGORY) {  // Categories
     prefix = "c:";
-    if (is_redir)
+    if (is_redir) {
       g_info.cat_redirect_count++;
-    else
+    } else {
       g_info.category_count++;
+    }
     g_wikistatus[wikiId].is_category = 1;
   } else {
     return;  // Other namespaces are not interesting
@@ -242,7 +246,10 @@ void PageHandler::data(const vector<string> &data) {
 #endif
   } else {
     graphId = ++g_info.graph_nodes_count;
-    is_cat_->write_bit(namespc == NS_CATEGORY);
+
+    bool node_is_cat = namespc == NS_CATEGORY;
+    g_nodeIsCat[graphId] = node_is_cat;
+    is_cat_->write_bit(node_is_cat);
 
     reply = redisCmd(redis_,
         "SETNX %s%s %d", prefix, hash.get_hash(), graphId);
@@ -517,8 +524,9 @@ void PageLinkHandler::data(const vector<string> &data) {
   int wikiId = atoi(data[pl_from].c_str());
 
   // Check if this page exists and is regular (not redirect)
-  if (g_wikistatus[wikiId].type != WikiStatus::REGULAR)
+  if (g_wikistatus[wikiId].type != WikiStatus::REGULAR) {
     return;  // If it is not regular page skip it
+  }
   if (g_wikistatus[wikiId].is_category) {
     g_info.skipped_fromcat_links++;
     return;  // Skip links from categories
@@ -550,6 +558,8 @@ void PageLinkHandler::data(const vector<string> &data) {
       "GET %s%s", prefix, hash.get_hash());
   if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
     int to_graphId = atoi(reply->str);
+
+    assert(g_nodeIsCat[to_graphId] == false);
 
 #ifdef DEBUG
   printf("link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
