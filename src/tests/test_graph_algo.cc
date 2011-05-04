@@ -69,22 +69,22 @@ TEST(CompleteGraphAlgo, PageRankSimple) {
   algo.Init();
   vector<pair<double, node_t> > res;
 
-  res = algo.PageRank(3, 1);
+  res = algo.PageRank(1);
   ASSERT_EQ(1u, res.size());
   ASSERT_EQ(1u, res[0].second);
 
-  res = algo.PageRank(3, 2);
+  res = algo.PageRank(2);
   ASSERT_EQ(2u, res.size());
   ASSERT_EQ(1u, res[0].second);
   ASSERT_EQ(3u, res[1].second);
 
-  res = algo.PageRank(3, 3);
+  res = algo.PageRank(3);
   ASSERT_EQ(3u, res.size());
   ASSERT_EQ(1u, res[0].second);
   ASSERT_EQ(3u, res[1].second);
   ASSERT_EQ(2u, res[2].second);
 
-  res = algo.PageRank(3, 1000);
+  res = algo.PageRank(1000);
   ASSERT_EQ(3u, res.size());
   ASSERT_EQ(1u, res[0].second);
   ASSERT_EQ(3u, res[1].second);

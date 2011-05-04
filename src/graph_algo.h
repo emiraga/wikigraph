@@ -22,7 +22,13 @@ class CompleteGraphAlgo {
   static const int DIST_ARRAY = 100;  // threshold to use array for distances
  public:
   explicit CompleteGraphAlgo(File *file)
-  : file_(file), queue_(NULL) {
+  : file_(file), invalid_node_(NULL), queue_(NULL) {
+    graph_.list = NULL;
+    graph_.edges = NULL;
+  }
+
+  CompleteGraphAlgo(File *file, BitArray *valid_node)
+  : file_(file), invalid_node_(valid_node), queue_(NULL) {
     graph_.list = NULL;
     graph_.edges = NULL;
   }
@@ -67,6 +73,8 @@ class CompleteGraphAlgo {
     uint32_t dist_count[DIST_ARRAY] = {0};
     std::map<uint32_t, uint32_t> dist_count_m;
 
+    assert(invalid_node_ == NULL || invalid_node_->get_value(start) == false);
+
     memset(dist_, -1, sizeof(dist_[0])*(graph_.num_nodes + 2));
     dist_[start] = 0;
     dist_count[0]++;
@@ -74,6 +82,7 @@ class CompleteGraphAlgo {
     // Add start node to queue
     queue_[0] = start;
     int queuesize = 1;
+
     // Process nodes from queue
     for (int top = 0; top < queuesize; top++) {
       node_t node = queue_[top];
@@ -134,6 +143,9 @@ class CompleteGraphAlgo {
 #ifdef DEBUG
       printf("processing node %d\n", k);
 #endif
+      if(invalid_node_ && invalid_node_->get_value(k))
+        continue;
+
       // This node should not be previously visited /*and not be a category*/
       if (nodeindex[k] == -1  /* && !IS_CATEGORY(k)*/) {
         // Push to execution stack
@@ -209,12 +221,23 @@ class CompleteGraphAlgo {
     return scc_result;
   }
 
-  vector<pair<double, node_t> > PageRank(uint32_t N, uint32_t how_many) {
+  vector<pair<double, node_t> > PageRank(uint32_t how_many) {
     double *rank1 = new double[graph_.num_nodes + 2];
     double *rank2 = new double[graph_.num_nodes + 2];
 
+    uint32_t N = 0u;
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      if (invalid_node_ && invalid_node_->get_value(node))
+        continue;
+
+      N++;
+    }
+
     const double dumping = 0.85;
     for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      if (invalid_node_ && invalid_node_->get_value(node))
+        continue;
+
       rank1[node] = 1.0 / N;
     }
 
@@ -225,6 +248,9 @@ class CompleteGraphAlgo {
 
       double delta = 0.0;
       for (node_t node = 1; node <= graph_.num_nodes; node++) {
+        if (invalid_node_ && invalid_node_->get_value(node))
+          continue;
+
         delta += std::fabs(rank1[node] - rank2[node]);
       }
       std::cout << "Delta: " << delta << endl;
@@ -234,6 +260,9 @@ class CompleteGraphAlgo {
 
     double ranksum = 0.0;
     for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      if (invalid_node_ && invalid_node_->get_value(node))
+        continue;
+
       ranksum += rank1[node];
     }
     std::cout << "Rank sum: " << ranksum << endl;
@@ -241,6 +270,9 @@ class CompleteGraphAlgo {
     vector<pair<double, node_t> > ret;
 
     for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      if (invalid_node_ && invalid_node_->get_value(node))
+        continue;
+
       ret.push_back(std::make_pair(rank1[node], node));
     }
     delete[] rank1;
@@ -261,16 +293,36 @@ class CompleteGraphAlgo {
     uint32_t in_degree = 0u;
 
     for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      if (invalid_node_ && invalid_node_->get_value(node))
+        continue;
+
       node_t *target = &graph_.edges[graph_.start(node)];
       node_t *end = &graph_.edges[graph_.end(node)];
       for ( ; target < end; target++) {
         // link is from (node) to (*target)
+
         if(*target == info_node) {
           in_degree++;
         }
+
+        // Checking the sanity of graph
+        assert(invalid_node_ == NULL || invalid_node_->get_value(*target) == false);
       }
     }
     return pii(in_degree, out_degree);
+  }
+
+  void SanityCheck() {
+    for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      node_t *target = &graph_.edges[graph_.start(node)];
+      node_t *end = &graph_.edges[graph_.end(node)];
+      for ( ; target < end; target++) {
+        // link is from (node) to (*target)
+ 
+        // Checking that there are no links to invalid nodes
+        assert(invalid_node_ == NULL || invalid_node_->get_value(*target) == false);
+      }
+    }
   }
 
   uint32_t num_nodes() const {
@@ -285,9 +337,15 @@ class CompleteGraphAlgo {
   void PowerIteration(uint32_t N, double dumping,
       double *rank_in, double *rank_out) {
     for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      if (invalid_node_ && invalid_node_->get_value(node))
+        continue;
+
       rank_out[node] = (1.0 - dumping) / N;
     }
     for (node_t node = 1; node <= graph_.num_nodes; node++) {
+      if (invalid_node_ && invalid_node_->get_value(node))
+        continue;
+
       node_t *target = &graph_.edges[graph_.start(node)];
       node_t *end = &graph_.edges[graph_.end(node)];
       int out_degree = graph_.end(node) - graph_.start(node);
@@ -303,6 +361,7 @@ class CompleteGraphAlgo {
  private:
   File *file_;
   Graph graph_;
+  BitArray *invalid_node_;
 
   // Used in computation
   node_t *queue_;

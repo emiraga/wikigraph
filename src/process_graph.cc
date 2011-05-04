@@ -34,6 +34,39 @@ void print_help(char *prg) {
   printf("Visit https://github.com/emiraga/wikigraph for more info.\n");
 }
 
+string graph_command(char *job, node_t node, CompleteGraphAlgo *graph, uint32_t num_nodes) {
+  string result;
+  switch (job[0]) {
+    case 'D': {  // count distances from node
+      vector<uint32_t> cntdist = graph->GetDistances(node);
+      result = "{\"count_dist\":" + util::to_json(cntdist) + "}";
+    }
+    break;
+    case 'S': {  // Sizes of strongly connected components
+      vector<pii> components = util::count_items(graph->Scc());
+      result = "{\"components\":" + util::to_json(components) + "}";
+    }
+    break;
+    case 'I': {  // Degree info
+      pii degrees = graph->DegreeInfo(node);
+      char msg[50];
+      snprintf(msg, sizeof(msg), "{\"in_degree\":%"PRIu32",\"out_degree\":%"PRIu32"}",
+          degrees.first, degrees.second);
+      result = string(msg);
+    }
+    break;
+    case 'R': {  // Page Rank
+      vector<pair<double, node_t> > rankp =
+        graph->PageRank(PAGERANK_RESULTS);
+      result = "{\"ranks\":" + util::to_json(rankp) + "}";
+    }
+    break;
+    default:
+      result = "{\"error\":\"Unknown command\"}";
+  }
+  return result;
+}
+
 int main(int argc, char *argv[]) {
   int fork_off = 0;
 
@@ -68,15 +101,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Should be called before fork()'s to save memory (copy-on-write)
-  SystemFile f_art;
-  if (!f_art.open("artlinks.graph", "rb")) {
-    perror("fopen");
-    exit(1);
-  }
-  CompleteGraphAlgo art_graph(&f_art);
-  art_graph.Init();
-  f_art.close();
+  // Next three sections should be called before fork()'s to 
+  // save memory (copy-on-write)
 
   // Load category links
   SystemFile f_cat;
@@ -88,8 +114,11 @@ int main(int argc, char *argv[]) {
   cat_graph.Init();
   f_cat.close();
 
+  // Check sanity of graph
+  cat_graph.DegreeInfo(1);
+
   // Load bit array => is node a category
-  BitArray is_category(art_graph.num_nodes()+1);
+  BitArray is_category(cat_graph.num_nodes()+1);
   SystemFile f_iscat;
   if (!f_iscat.open("graph_nodeiscat.bin", "rb")) {
     perror("fopen");
@@ -97,6 +126,19 @@ int main(int argc, char *argv[]) {
   }
   is_category.loadFile(&f_iscat);
   f_iscat.close();
+
+  // Load article links
+  SystemFile f_art;
+  if (!f_art.open("artlinks.graph", "rb")) {
+    perror("fopen");
+    exit(1);
+  }
+  CompleteGraphAlgo art_graph(&f_art, &is_category);  // Category nodes are invalid
+  art_graph.Init();
+  f_art.close();
+
+  // Check sanity of graph
+  art_graph.SanityCheck();
 
   // Forking children into background
   bool is_parent = true;
@@ -154,43 +196,39 @@ int main(int argc, char *argv[]) {
     time_t t_start = clock();
     string result;
     bool no_result = false;
-    switch (job[0]) {
-      // command for article links
-      case 'D': {  // count distances from node
-        node_t node = atoi(job+1);
-        if (node < 1 || node > num_nodes) {
-          result = "{\"error\":\"Node out of range\"}";
-          break;
+
+    switch(job[0]) {
+      // command
+      case 'a': { // for articles graph
+        node_t node = 0;
+        if(isdigit(job[2])) {
+          node = atoi(job+2);
+          if (node < 1 || node > num_nodes) {
+            result = "{\"error\":\"Node out of range\"}";
+            break;
+          }
+          if (is_category.get_value(node)) {
+            result = "{\"error\":\"Node is category\"}";
+            break;
+          }
         }
-        if (is_category.get_value(node)) {
-          result = "{\"error\":\"Node is category\"}";
-          break;
+        printf("node=%d\n", node);
+        result = graph_command(job+1, node, &art_graph, num_nodes);
+      }
+      break;
+      // command
+      case 'c': { // for categories graph
+        node_t node = 0;
+        if(isdigit(job[2])) {
+          node = atoi(job+2);
+          if (node < 1 || node > num_nodes) {
+            result = "{\"error\":\"Node out of range\"}";
+            break;
+          }
+          // Category graph does not have limitation on which nodes it can be
+          // called.
         }
-        vector<uint32_t> cntdist = art_graph.GetDistances(node);
-        result = "{\"count_dist\":" + util::to_json(cntdist) + "}";
-      }
-      break;
-      // command for article links
-      case 'S': {  // Sizes of strongly connected components
-        vector<pii> components = util::count_items(art_graph.Scc());
-        result = "{\"components\":" + util::to_json(components) + "}";
-      }
-      break;
-      // command for article nodes
-      case 'I': {  // Degree info
-        node_t node = atoi(job+1);
-        pii degrees = art_graph.DegreeInfo(node);
-        char msg[50];
-        snprintf(msg, sizeof(msg), "{\"in_degree\":%"PRIu32",\"out_degree\":%"PRIu32"}",
-            degrees.first, degrees.second);
-        result = string(msg);
-      }
-      break;
-      // command for article links
-      case 'R': {  // Page Rank
-        vector<pair<double, node_t> > rankp =
-          art_graph.PageRank(num_nodes, PAGERANK_RESULTS);
-        result = "{\"ranks\":" + util::to_json(rankp) + "}";
+        result = graph_command(job+1, node, &cat_graph, num_nodes);
       }
       break;
       // command

@@ -47,6 +47,10 @@
     tr:hover {
       background-color: #c7cbee;
     }
+    .imglabel {
+      text-align: center;
+      font-size: 14px;
+    }
   </style>
   <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
 </head>
@@ -84,33 +88,41 @@
     <table border="0" width="400px">
     <tbody>
       <tr><th>Year<th>2007<th>2011</tr>
-      <tr><th>Articles<td>2301486<td><%=num_articles%></tr>
-      <tr><th>Article links<td>55550003<td><%=num_artlinks%></tr>
-      <tr><th>Categories<td><td><%=num_categories%></tr>
-      <tr><th>Category links<td><td><%=num_catlinks%></tr>
+      <tr><th>Articles<td>2301486<td><%=art.num_articles%></tr>
+      <tr><th>Article links<td>55550003<td><%=art.num_links%></tr>
+      <tr><th>Categories<td><td><%=cat.num_categories%></tr>
+      <tr><th>Category links<td><td><%=cat.num_links%></tr>
+      <tr><th><abbr title="Articles+Categories">All nodes</abbr><td><td><%=art.num_nodes%></tr>
     </tbody>
     </table>
 
+    <!--
     <p>
       Data from 2007 was reported by <a href="http://www.netsoc.tcd.ie/~mu/wiki/">Stephen Dolan</a>, I have no idea if it's correct.
-      Ratio of links versus articles does seem to be increased drastically over 4 years.
+      Ratio of links versus articles does seem to be increased drastically over last 4 years.
     </p>
+    -->
+
+    <p>
+      For instance, article "Penny Can" has 3 outgoing article links and 2 category links. Former are directed whereas latter are undirected.
+    </p>
+    <img src="http://i.imgur.com/iCJx9.png" />
+    <div class="imglabel">Sample node with 3 article and 2 category links.</div>
 
     <h2>Article PageRank</h2>
 
-    <!-- Ohmigod we are using tables!?! -->
-    <table width="400px" border="0">
+    <table width="100%" border="0">
       <tbody>
-        <% for ( var i = 0; i != pageranks.length; i++ ) { %>
-          <tr>
-            <td><a rel="node<%=pageranks[i][1]%>" href="<%=enwiki+pageranks[i][2]%>"><%=pageranks[i][2]%></a></td>
-            <td>(<%=(100*pageranks[i][0]).toFixed(3)%>%)</td>
+        <% var pr=art.pageranks; for ( var i = 0; i != pr.length; i++ ) {  %>
+          <tr rel="node<%=pr[i][1]%>" >
+            <td><a href="<%=enwiki+pr[i][2]%>"><%=pr[i][2]%></a></td>
+            <td>(<%=(100*pr[i][0]).toFixed(3)%>%)</td>
           </tr>
         <% } %>
       </tbody>
     </table>
     <p>
-      <a href="http://en.wikipedia.org/wiki/PageRank">PageRank</a> is probability that random surfer of will be located at a particular page.
+      <a href="http://en.wikipedia.org/wiki/PageRank">PageRank</a> is probability that surfer of will be located at a particular article, following article links randomly.
       For technical reasons, links from one article to another are counted just once (no duplicates).
     </p>
 
@@ -119,25 +131,27 @@
     <table border="0" width="300px">
       <tbody>
         <tr><th>Component size</th><th>How many?</th></tr>
-        <% for ( var i = 0; i != scc.length; i++ ) { %>
+        <% for ( var i = 0; i != art.scc.length; i++ ) { %>
           <tr>
-            <td> <%=scc[i][0]%> articles</td>
-            <td> <%=scc[i][1]%></td>
+            <td> <%=art.scc[i][0]%> articles</td>
+            <td> <%=art.scc[i][1]%></td>
           </tr>
         <% } %>
       </tbody>
     </table>
     
-    <p>Compared to reports from <a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more non-trivial small components.</p>
+    <p>
+      Compared to reports from <a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
+    </p>
 
     <h2>Minimum distance between articles</h2>
  
-    This data is based on random sampling of <%=articles_done%> (<%=(100*articles_done/num_articles).toFixed(1)%>%) articles.
+    This data is based on random sampling of <%=art.nodes_done%> (<%=(100*art.nodes_done/art.num_nodes).toFixed(1)%>%) articles.
 
     <table border="0" width="400px">
       <tbody>
-        <tr><th>Average reachable articles<td><%= (reachable_sum / articles_done ).toFixed(2) %></th></tr>
-        <tr><th>Average distance<td><%= (distance_sum / reachable_sum ).toFixed(2) %></th></tr>
+        <tr><th>Average reachable articles<td><%= (art.reachable_sum / art.nodes_done ).toFixed(2) %></th></tr>
+        <tr><th>Average distance (clicks)<td><%= (art.distance_sum / art.reachable_sum ).toFixed(2) %></th></tr>
       </tbody>
     </table>
 
@@ -163,8 +177,8 @@
     <!--
     <h2>Closeness centrality</h2>
     <ol>
-    <% for ( var i = 0; i != close_centr.length; i++ ) { %>
-      <li><a href="<%=enwiki+close_centr[i].name%>"><%=close_centr[i].name%> (<%=close_centr[i].avg_dist.toFixed(3)%>)</a></li>
+    <% for ( var i = 0; i != art.close_centr.length; i++ ) { %>
+      <li><a href="<%=enwiki+art.close_centr[i].name%>"><%=art.close_centr[i].name%> (<%=art.close_centr[i].avg_dist.toFixed(3)%>)</a></li>
     <% } %>
     </ol>
     -->
