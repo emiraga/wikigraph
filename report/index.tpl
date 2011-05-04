@@ -6,16 +6,9 @@
   <title>emiraga/wikigraph @ GitHub</title>
 
   <style type="text/css">
-    body {
-      margin-top: 1.0em;
-      background-color: #c7dbfe;
-      font-family: "Helvetica,Arial,FreeSans";
-      color: #000000;
-    }
-    #container {
-      margin: 0 auto;
-      width: 700px;
-    }
+    body { margin-top: 1.0em; background-color: #c7dbfe;
+      font-family: "Helvetica,Arial,FreeSans"; color: #000000; }
+    #container { margin: 0 auto; width: 700px; }
     h1 { font-size: 2.8em; color: #b87441; margin-bottom: 3px; }
     h1 .small { font-size: 0.4em; }
     h1 a { text-decoration: none; }
@@ -28,7 +21,9 @@
     hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
     .footer { text-align:center; padding-top:30px; font-style: italic; }
     p { line-height: 25px; }
-    .nodeinfo { border: 1px solid black; width: 220px; height 220px; background-color: white; padding:0px 5px 0px 5px;
+    .nodeinfo { 
+      border: 1px solid black;
+      width: 440px; height 20px; background-color: white; padding:0px 5px 0px 5px;
       -o-box-shadow: 5px 5px 5px #000;
       -moz-box-shadow: 5px 5px 5px #000;
       -webkit-box-shadow: 5px 5px 5px #000;
@@ -38,19 +33,15 @@
       -ms-filter: "progid:DXImageTransform.Microsoft.Blur(PixelRadius=3,MakeShadow=true,ShadowOpacity=0.30)";
       zoom: 1;
     }
-    .nodeinfo p {
-      font-size: 0.9em;
-      line-height: 14px;
-      margin-bottom: 3px;
-      margin-top: 3px;
-    }
-    tr:hover {
-      background-color: #c7cbee;
-    }
-    .imglabel {
-      text-align: center;
-      font-size: 14px;
-    }
+    .nodeinfo p { font-size: 0.9em; line-height: 14px; margin-bottom: 3px; margin-top: 3px; }
+    /*.nodeinfo .left { position:absolute; top:100px; left:0px; width: 220px; border: 0 solid black; }
+    .nodeinfo .right { position:absolute; top:100px; left:220px; width: 220px; border: 0 solid black; }*/
+    .nodeinfo .left { display: inline-block;  width: 215px; border-right: 1px solid black; }
+    .nodeinfo .right { display: inline-block; width: 215px; }
+    .nodeinfo h3 { line-height: 0px; }
+    /*.nodeinfo img { margin-left: -10px; }*/
+    tr:hover { background-color: #c7cbee; }
+    .imglabel { text-align: center; font-size: 14px; }
   </style>
   <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
 </head>
@@ -104,7 +95,8 @@
     -->
 
     <p>
-      For instance, article "Penny Can" has 3 outgoing article links and 2 category links. Former are directed whereas latter are undirected.
+      For instance, article "Penny Can" has 3 outgoing <u>article links</u> and 2 <u>category links</u>. Former are directed whereas latter are undirected.
+      Each article or category is one <u>node</u> in a graph.
     </p>
     <img src="http://i.imgur.com/iCJx9.png" />
     <div class="imglabel">Sample node with 3 article and 2 category links.</div>
@@ -189,19 +181,29 @@
 
   </div>
 
-  <% for ( var i = 0; i != interesting_nodes.length; i++ ) { var info = interesting_nodes[i]; %>
-    <div id="node<%=info.node%>" class="nodeinfo">
-    <% if(info.is_article) { %>
-      <h3><%=info.name%></h3>
-      <p>Articles at a particular distance:</p>
-      <img src="http://chart.apis.google.com/chart?chds=0,<%=info.max_dist%>&chxt=x,y&chxr=1,0,<%=info.max_dist%>&chbh=a&chs=220x100&cht=bvs&chd=t:<%=info.count_dist.join(",")%>" />
-      <p>Incoming article links: <%=info.in_degree%></p>
-      <p>Outgoing article links: <%=info.out_degree%></p>
-      <p>Rachable articles: <%=info.reachable%></p>
-      <p>Average distance: <%=(info.distance / info.reachable).toFixed(4)%></p>
+  <div id="interesing_nodes">
+    <% for ( var i = 0; i != interesting_nodes.length; i++ ) { var info = interesting_nodes[i]; %>
+      <div id="node<%=info.node%>" class="nodeinfo">
+        <h3><%=info.name%></h3>
+        <div class="left">
+          <p><b>Articles</b> at a particular distance:</p>
+          <img src="http://chart.apis.google.com/chart?chds=0,<%=info.art.max_dist%>&chxt=x,y&chxr=1,0,<%=info.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.art.count_dist.join(",")%>" />
+          <p>Incoming article links: <%=info.art.in_degree%></p>
+          <p>Outgoing article links: <%=info.art.out_degree%></p>
+          <p>Rachable articles: <%=info.art.stat.reachable%></p>
+          <p>Average distance: <%=(info.art.stat.closeness).toFixed(4)%></p>
+        </div>
+        <div class="right">
+          <p><b>Category links</b></p>
+          <p>Nodes at a particular distance:</p>
+          <img src="http://chart.apis.google.com/chart?chds=0,<%=info.cat.max_dist%>&chxt=x,y&chxr=1,0,<%=info.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.cat.count_dist.join(",")%>" />
+          <p>Category links: <%=info.cat.in_degree%></p>
+          <p>Rachable nodes: <%=info.cat.stat.reachable%></p>
+          <p>Average distance: <%=(info.cat.stat.closeness).toFixed(4)%></p>
+        </div>
+      </div>
     <% } %>
-    </div>
-  <% } %>
+  </div>
   <script src="index.js"></script>
 </body>
 </html>

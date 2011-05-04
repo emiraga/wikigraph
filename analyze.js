@@ -432,13 +432,21 @@ Controller.prototype.ResolveInfo = function(type, total, cb_get_node, cb_set_inf
       var _i = i; 
       var _node = node;
       return function(job, result) {
-        if(result.error) return; // Categories report error
+        if(result.error) {
+          // For categories, error will be reported
+          result.in_degree = result.out_degree = 0;
+        }
 
         _this.RunJob(type+"D"+_node, function(job, dist) {
-          if(!dist.error) {
-            // Some nodes will report error, example: category nodes in article graph
-            cb_set_info(_i, result.in_degree, result.out_degree, dist.count_dist);
+
+          if(dist.error) {
+            // For categories in article graph, error will be reported
+            // We want this category processed anyway
+            dist.count_dist = [];
           }
+
+          cb_set_info(_i, result.in_degree, result.out_degree, dist.count_dist);
+
           resolved += 1;
           if (resolved == total) {
             cb_done();
@@ -724,7 +732,7 @@ function main(opts) {
     };
   };
 
-  var simplify_interesing = function(callback) {
+  var resolve_interesting_names = function(callback) {
     var list = data.interesting_nodes;
 
     list = list.sort(function (a, b) { return a.node - b.node; });
@@ -742,40 +750,36 @@ function main(opts) {
         return data.interesting_nodes[i].node;
       },
       function set(i, name) {
-        data.interesting_nodes[i].name = name;
+        var data_node = data.interesting_nodes[i];
+        data_node.name = name;
+        data_node.art = {};
+        data_node.cat = {};
       },
       callback
     );
   };
-/*
-  var resolve_interesting_info = function(callback) {
-    control.ResolveInfo(data.interesting_nodes.length,
-      function get(i) {
-        return data.interesting_nodes[i].node;
-      },
-      function set(i, in_degree, out_degree, count_dist) {
-        var node_data = data.interesting_nodes[i]
 
-        // For categories, this function will not be called
-        node_data.is_article = true;
-        
-        node_data.in_degree = in_degree;
-        node_data.out_degree = out_degree;
-        node_data.count_dist = count_dist;
-        node_data.max_dist = Math.max.apply(null, count_dist);
+  var gen_resolve_interesting = function(type, member_name) {
+    return function(callback) {
+      control.ResolveInfo(type, data.interesting_nodes.length,
+        function get(i) {
+          return data.interesting_nodes[i].node;
+        },
+        function set(i, in_degree, out_degree, count_dist) {
+          var node_data = data.interesting_nodes[i][member_name];
 
-        node_data.reachable = 0;
-        node_data.distance = 0;
-        for (var d = 1, _len = count_dist.length; d < _len; d++) {
-          var count = count_dist[d];
-          node_data.reachable += count;
-          node_data.distance += count * d;
-        }
-      },
-      callback
-    );
+          node_data.in_degree = in_degree;
+          node_data.out_degree = out_degree;
+          node_data.count_dist = count_dist;
+          node_data.max_dist = Math.max.apply(null, count_dist);
+
+          node_data.stat = data[member_name].CalcAvgDistReachable(count_dist);
+        },
+        callback
+      );
+    };
   };
-*/
+
   var stop_and_close = function(callback) {
     monitor.Stop();
     mutex.Stop();
@@ -811,11 +815,11 @@ function main(opts) {
 
       [gen_compute_distances('c','cat', RANDOM_CATEGORIES)],
 
-      [gen_centr_articles('a','art'),gen_centr_articles('c','cat')],
+      [gen_centr_articles('a','art'), gen_centr_articles('c','cat')],
       
-      [simplify_interesing],
-
-//    [resolve_interesting_names, resolve_interesting_info],
+      [resolve_interesting_names],
+      
+      [gen_resolve_interesting('a','art'), gen_resolve_interesting('c','cat')],
 
       [stop_and_close, write_report]
   );
