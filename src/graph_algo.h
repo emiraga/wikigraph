@@ -253,7 +253,6 @@ class CompleteGraphAlgo {
 
         delta += std::fabs(rank1[node] - rank2[node]);
       }
-      std::cout << "Delta: " << delta << endl;
       if (delta < 1e-4)
         break;
     }
@@ -265,7 +264,6 @@ class CompleteGraphAlgo {
 
       ranksum += rank1[node];
     }
-    std::cout << "Rank sum: " << ranksum << endl;
 
     vector<pair<double, node_t> > ret;
 

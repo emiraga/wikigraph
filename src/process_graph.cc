@@ -103,7 +103,8 @@ int main(int argc, char *argv[]) {
 
   // Next three sections should be called before fork()'s to 
   // save memory (copy-on-write)
-
+  printf("Loading...");
+  fflush(stdout);
   // Load category links
   SystemFile f_cat;
   if (!f_cat.open("catlinks.graph", "rb")) {
@@ -139,6 +140,8 @@ int main(int argc, char *argv[]) {
 
   // Check sanity of graph
   art_graph.SanityCheck();
+
+  printf("done.\n");
 
   // Forking children into background
   bool is_parent = true;
