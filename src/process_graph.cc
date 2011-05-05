@@ -34,7 +34,7 @@ void print_help(char *prg) {
   printf("Visit https://github.com/emiraga/wikigraph for more info.\n");
 }
 
-string graph_command(char *job, node_t node, CompleteGraphAlgo *graph, uint32_t num_nodes) {
+string graph_command(char *job, node_t node, CompleteGraphAlgo *graph, uint32_t num_nodes, bool verbose) {
   string result;
   switch (job[0]) {
     case 'D': {  // count distances from node
@@ -57,7 +57,7 @@ string graph_command(char *job, node_t node, CompleteGraphAlgo *graph, uint32_t 
     break;
     case 'R': {  // Page Rank
       vector<pair<double, node_t> > rankp =
-        graph->PageRank(PAGERANK_RESULTS);
+        graph->PageRank(PAGERANK_RESULTS, verbose);
       result = "{\"ranks\":" + util::to_json(rankp) + "}";
     }
     break;
@@ -216,7 +216,7 @@ int main(int argc, char *argv[]) {
           }
         }
         printf("node=%d\n", node);
-        result = graph_command(job+1, node, &art_graph, num_nodes);
+        result = graph_command(job+1, node, &art_graph, num_nodes, is_parent);
       }
       break;
       // command
@@ -231,7 +231,7 @@ int main(int argc, char *argv[]) {
           // Category graph does not have limitation on which nodes it can be
           // called.
         }
-        result = graph_command(job+1, node, &cat_graph, num_nodes);
+        result = graph_command(job+1, node, &cat_graph, num_nodes, is_parent);
       }
       break;
       // command

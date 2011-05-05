@@ -221,7 +221,7 @@ class CompleteGraphAlgo {
     return scc_result;
   }
 
-  vector<pair<double, node_t> > PageRank(uint32_t how_many) {
+  vector<pair<double, node_t> > PageRank(uint32_t how_many, bool verbose) {
     double *rank1 = new double[graph_.num_nodes + 2];
     double *rank2 = new double[graph_.num_nodes + 2];
 
@@ -253,9 +253,10 @@ class CompleteGraphAlgo {
 
         delta += std::fabs(rank1[node] - rank2[node]);
       }
-#ifdef DEBUG
-      printf("Delta: %lf\n", delta);
-#endif
+      if (verbose) {
+        printf("Delta: %lf\n", delta);
+      }
+
       if (delta < 1e-4)
         break;
     }
