@@ -215,7 +215,6 @@ int main(int argc, char *argv[]) {
             break;
           }
         }
-        printf("node=%d\n", node);
         result = graph_command(job+1, node, &art_graph, num_nodes, is_parent);
       }
       break;
