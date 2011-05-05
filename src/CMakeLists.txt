@@ -44,12 +44,10 @@ set_target_properties ( hiredis PROPERTIES
 
 #\
 add_executable ( run_tests
-    md5/md5.c
     tests/test_file_io.cc
     tests/test_graph.cc
     tests/test_graph_algo.cc
     tests/test_redis_util.cc
-    tests/test_hash.cc
     tests/test_sql_parser.cc
     gmock/gmock-gtest-all.cc
     tests/run_tests.cc
@@ -62,7 +60,6 @@ target_link_libraries ( run_tests
 
 #\
 add_executable ( gen_graph
-    md5/md5.c
     libhiredis.a
     gen_graph.cc
 )

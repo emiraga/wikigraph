@@ -8,7 +8,6 @@
 #include "sql_parser.h"
 #include "file_io.h"
 #include "redis.h"
-#include "hash.h"
 #include "graph.h"
 
 #include <google/dense_hash_map>
