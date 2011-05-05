@@ -24,12 +24,6 @@ enum WikiNamespaces {
 
 namespace {  // unnamed
 
-/**************
- * I would normally use redis for this data, but I was primarily trying to
- * reduce memory usage of redis server by storing certain keys in an array
- * rather than the database.
- */
-
 #pragma pack(push)
 #pragma pack(1)     // set alignment to 1 byte boundary
 struct WikiStatus {
@@ -93,9 +87,6 @@ class Stage {
   virtual ~Stage() {}
   virtual void main(redisContext *redis) = 0;
   virtual void finish(redisContext *redis) = 0;
-  // Between invocations of 'main' and 'finish', redis database is flushed.
-  // Stage should save data temporary data in 'main' invocation,
-  // but permanent save is from 'finish' invocation.
 };
 
 /**************
@@ -871,20 +862,6 @@ int main(int argc, char *argv[]) {
   reply = wikigraph::redisCmd(redis, "SELECT %d", REDIS_DATABASE);
   freeReplyObject(reply);
 
-  printf("I am about to flush your redis database #%d\n", REDIS_DATABASE);
-  printf("Are you sure you want to continue? (y/n) ");
-  char choice[21];
-  scanf("%20s", choice);
-
-  if (choice[0] != 'y' && choice[0] != 'Y') {
-    redisFree(redis);
-    return 1;
-  }
-
-  printf("Flushing database.\n");
-  reply = wikigraph::redisCmd(redis, "FLUSHALL");
-  freeReplyObject(reply);
-
   // Add stages
   wikigraph::vector<wikigraph::Stage*> stages;
   stages.push_back(new wikigraph::stage1::Stage1());
@@ -899,10 +876,6 @@ int main(int argc, char *argv[]) {
     printf("Starting stage %d\n", i+1);
     stages[i]->main(redis);
   }
-
-  printf("Flushing database.\n");
-  reply = wikigraph::redisCmd(redis, "FLUSHALL");
-  freeReplyObject(reply);
 
   printf("Finalizing.\n");
   for (size_t i = 0; i < stages.size(); i++) {
