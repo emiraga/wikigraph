@@ -3,10 +3,10 @@ var redisnode = require("redis-node");
 var fs = require("fs");
 
 // {{{ config
-var WAIT_SECONDS = 6; // for jobs to complete
-var KEEP_CLOSEST = 100; // articles
-var RANDOM_ARTICLES = 100; // Randomly sample X articles, put 0 for all articles
-var RANDOM_CATEGORIES = 0; // Randomly sample X categories, put 0 for all categories
+var WAIT_SECONDS = 7; // for jobs to complete
+var KEEP_CLOSEST = 1; // nodes
+var RANDOM_ARTICLES = 10; // Randomly sample X nodes, put 0 for all nodes
+var RANDOM_CATEGORIES = 10; // Randomly sample X nodes, put 0 for all nodes
 // }}}
 
 // {{{ tmpl - micro-templates for javascript
@@ -268,11 +268,14 @@ JobMonitor.prototype.Start = function(callback) {
   }
   var _this = this;
   this.monitor = true;
-  // Empty the list
-  this.redis.ltrim('queue:running', 1, 0, function(err) {
+  // Empty queues
+  _this.redis.ltrim('queue:jobs', 1, 0, function(err) {
     if (err) throw err;
-    _this._popqueue_block();
-    callback();
+    _this.redis.ltrim('queue:running', 1, 0, function(err) {
+      if (err) throw err;
+      _this._popqueue_block();
+      callback();
+    });
   });
 };
 JobMonitor.prototype.Stop = function() {
@@ -343,6 +346,7 @@ Controller.prototype._RunJob = function(job, callback) {
   this.redis.lpush('queue:jobs', job);
 };
 Controller.prototype.RunJob = function(job, callback) {
+  console.log('RunJob:' + job);
   // Results are cached, check that first
   var _this = this;
   this.redis.get('result:'+job, function(err, result) {
@@ -376,18 +380,14 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map) {
       var percent = (100*(node-len)/num_nodes).toFixed(4);
       console.log(percent+'%  queue:jobs len is '+len+' bulksize '+bulksize);
       if (len < 3*bulksize || len < 3*granul) {
-        if (len < 2*bulksize || len < 2*granul) {
+        if (len < bulksize || len < granul) {
           bulksize += granul;
         }
         var endpoint = Math.min(num_nodes, node + bulksize);
         for(var i=node+1; i<= endpoint; i++) {
           _this.redis.lpush('queue:jobs', command + map(i));
         }
-        node += bulksize;
-      } else {
-        if(bulksize > 0) {
-          bulksize -= granul;
-        }
+        node = endpoint;
       }
       if (node < num_nodes || len > 0) {
         setTimeout(insert_bulk, 1000);
@@ -652,12 +652,15 @@ function main(opts) {
   };
 
   // Get connected components
-  monitor.ignore_list['aS'] = true;
-  monitor.ignore_list['cS'] = true;
+  //monitor.ignore_list['aS'] = true;
+  //monitor.ignore_list['cS'] = true;
+  monitor.waittime_job['aS'] = 30*1000;
+  monitor.waittime_job['cS'] = 30*1000;
 
   var init_compute_art_scc = function(callback) {
     control.RunJob('aS', function(job, result) {
       data.art.SetSCC(result.components);
+      console.log('Article links SCC complete');
       callback();
     });
   };
@@ -665,13 +668,16 @@ function main(opts) {
   var init_compute_cat_scc = function(callback) {
     control.RunJob('cS', function(job, result) {
       data.cat.SetSCC(result.components);
+      console.log('Category links SCC complete');
       callback();
     });
   };
 
   // Get PageRanks
-  monitor.ignore_list['aR'] = true;
-  monitor.ignore_list['cR'] = true;
+  //monitor.ignore_list['aR'] = true;
+  //monitor.ignore_list['cR'] = true;
+  monitor.waittime_job['aR'] = 150*1000;
+  monitor.waittime_job['cR'] = 150*1000;
 
   /**
    * @param type        'a' or 'c'
@@ -687,7 +693,11 @@ function main(opts) {
         control.ResolveNames(ranks.length,
           function get(i) { return ranks[i][1]; },
           function set(i, name) { ranks[i][2] = name; },
-          function done() { data[member_name].SetPageRanks(ranks); callback(); }
+          function done() {
+            data[member_name].SetPageRanks(ranks);
+            console.log('Page rank complete.');
+            callback();
+          }
         );
       });
     }
@@ -778,6 +788,8 @@ function main(opts) {
     }
     data.interesting_nodes = ret;
 
+    console.log('Interesing nodes: ' + ret.length);
+
     control.ResolveNames(data.interesting_nodes.length,
       function get(i) {
         return data.interesting_nodes[i].node;
@@ -788,7 +800,10 @@ function main(opts) {
         data_node.art = {};
         data_node.cat = {};
       },
-      callback
+      function() {
+        console.log('Done interesing names.');
+        callback();
+      }
     );
   };
 
@@ -799,6 +814,7 @@ function main(opts) {
           return data.interesting_nodes[i].node;
         },
         function set(i, in_degree, out_degree, count_dist) {
+          console.log(i);
           var node_data = data.interesting_nodes[i][member_name];
 
           node_data.in_degree = in_degree;
@@ -808,7 +824,10 @@ function main(opts) {
 
           node_data.stat = data[member_name].CalcAvgDistReachable(count_dist);
         },
-        callback
+        function() {
+          console.log('Done interesing info.');
+          callback();
+        }
       );
     };
   };
@@ -869,22 +888,21 @@ function main(opts) {
   // Complete description of report generation process
   var process = new Processing(
       [init_mutex],
-
       [init_monitor],
 
-      [init_get_counts, init_compute_art_scc, init_compute_cat_scc, gen_compute_pageranks('a','art')],
+      [gen_compute_pageranks('a','art'), init_get_counts, init_compute_art_scc, init_compute_cat_scc],
 
       [gen_compute_distances('a','art', RANDOM_ARTICLES)],
-
       [gen_compute_distances('c','cat', RANDOM_CATEGORIES)],
 
       [gen_centr_articles('a','art'), gen_centr_articles('c','cat')],
       
       [resolve_interesting_names],
-      
-      [gen_resolve_interesting('a','art'), gen_resolve_interesting('c','cat')],
+      [gen_resolve_interesting('a','art')],
+      [gen_resolve_interesting('c','cat')],
 
-      [redis_close, stop_mutex_monitor, write_report, save_state]
+      [redis_close, stop_mutex_monitor, write_report, save_state],
+      [function(){ process.exit(); }] // deadly!
   );
   process.run();
 };
