@@ -375,8 +375,10 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map) {
       if (err) throw err;
       var percent = (100*(node-len)/num_nodes).toFixed(4);
       console.log(percent+'%  queue:jobs len is '+len+' bulksize '+bulksize);
-      if (len < bulksize || len < granul) {
-        bulksize += granul;
+      if (len < 3*bulksize || len < 3*granul) {
+        if (len < bulksize || len < granul) {
+          bulksize += granul;
+        }
         var endpoint = Math.min(num_nodes, node + bulksize);
         for(var i=node+1; i<= endpoint; i++) {
           _this.redis.lpush('queue:jobs', command + map(i));
