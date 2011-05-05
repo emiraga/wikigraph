@@ -261,15 +261,23 @@ function JobMonitor(redis, redis_block) {
 JobMonitor.prototype.on = function(name, cb) {
   this.onevent[name].push(cb);
 };
-JobMonitor.prototype.Start = function() {
-  if (this.monitor)
+JobMonitor.prototype.Start = function(callback) {
+  if (this.monitor) {
     throw new Error("JobMonitor is already running");
+  }
+  var _this = this;
   this.monitor = true;
-  this._popqueue_block();
+  // Empty the list
+  this.redis.ltrim('queue:running', 1, 0, function(err) {
+    if (err) throw err;
+    _this._popqueue_block();
+    callback();
+  });
 };
 JobMonitor.prototype.Stop = function() {
-  if (!this.monitor)
+  if (!this.monitor) {
     throw new Error("JobMonitor is not started");
+  }
   this.monitor = false;
 };
 JobMonitor.prototype._popqueue_block = function() {
@@ -613,10 +621,12 @@ function main(opts) {
   var control = new Controller(redis, redis_pubsub);  // pubsub can't be mixed with regular ops
   var monitor = new JobMonitor(redis, redis_block);  // blpop is blocking operation
 
-  // Init step 0 - start mutex
-  var init_mutex_monitor = function(callback) {
-    monitor.Start();
+  var init_mutex = function(callback) {
     mutex.Start(callback);
+  };
+
+  var init_monitor = function(callback) {
+    monitor.Start(callback);
   };
 
   // Get counts
@@ -848,9 +858,11 @@ function main(opts) {
 
   // Complete description of report generation process
   var process = new Processing(
+      [init_mutex],
 
-      [init_mutex_monitor, init_get_counts, init_compute_art_scc, init_compute_cat_scc, 
-        gen_compute_pageranks('a','art'), gen_compute_pageranks('c','cat')],
+      [init_monitor],
+
+      [init_get_counts, init_compute_art_scc, init_compute_cat_scc, gen_compute_pageranks('a','art')],
 
       [gen_compute_distances('a','art', RANDOM_ARTICLES)],
 
