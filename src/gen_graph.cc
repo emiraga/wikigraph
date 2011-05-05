@@ -64,15 +64,26 @@ struct BKDRHash {
     size_t seed = 131; // 31 131 1313 13131 131313 etc..
     size_t hash = 0;
 
-    for(std::size_t i = 0; i < str.size(); i++) {
+    for(size_t i = 0; i < str.size(); i++) {
       hash = (hash * seed) + str[i];
     }
     return hash;
   }
 };
 
-dense_hash_map<string, int, BKDRHash> g_redirName2wiki;
-dense_hash_map<string, int, BKDRHash> g_name2graphId;
+struct FVNHash {
+  size_t operator()(const string& str) const {
+    // These coefficients are wrong for 64-bit machine, but I don't care.
+    size_t hash = 2166136261u;
+    for(size_t i = 0; i < str.size(); i++) {
+      hash = (hash ^  str[i]) * 16777619u;
+    }
+    return hash;
+  }
+};
+
+dense_hash_map<string, int, FVNHash> g_redirName2wiki;
+dense_hash_map<string, int, FVNHash> g_name2graphId;
 dense_hash_map<int, string> g_wiki2redirName;
 
 }  // namespace
@@ -605,15 +616,15 @@ void PageLinkHandler::data(const vector<string> &data) {
 
   int to_graphId = g_name2graphId[title];
 //if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
-  if (to_graphId > 0) {
+  if (to_graphId > 0 && !g_nodeIsCat[to_graphId]) {
     //int to_graphId = atoi(reply->str);
-    assert(g_nodeIsCat[to_graphId] == false);
 
 #ifdef DEBUG
   printf("link from graphId=%d (wikiId=%d)  to=%s graphId=%d  type=%d\n",
       from_graphId, wikiId, title.c_str(), to_graphId,
       g_wikistatus[to_graphId].type);
 #endif
+
     g_info.article_links_count++;
     graph_->add_edge(to_graphId);
   }
