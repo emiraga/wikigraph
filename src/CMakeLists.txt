@@ -1,6 +1,17 @@
 cmake_minimum_required ( VERSION 2.6 )
 add_definitions ( -Wall -fstrict-aliasing -Wstrict-aliasing=2 )
 
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+  add_definitions( -DDEBUG )
+else()
+  add_definitions( -O3 )
+endif()
+
+set(CXX_FLAGS_RELEASE  "-O3") #this doesn't work, i need to remove -DNDEBUG from Release
+set(C_FLAGS_RELEASE    "-O3")
+
+SET(CMAKE_BUILD_TYPE Release CACHE STRING "ReleaseAssert/Debug")
+
 find_package (Threads)
 find_library(ZLIB z "Zlib library")
 
