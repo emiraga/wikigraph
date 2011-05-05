@@ -201,15 +201,15 @@
       </tbody>
     </table>
     -->
-    <hr />
 
+    <!--
     <h2>Interactive</h2>
 
     <p>
       I don&#39;t have public server to host a web service. However, there are 
       <a href="http://en.wikipedia.org/wiki/Wikipedia:Six_degrees_of_Wikipedia#External_links">other tools</a> available for computing minimum distance.
     </p>
-
+    -->
     <h2>Download</h2>
 
     <p>
