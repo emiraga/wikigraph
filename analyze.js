@@ -726,7 +726,7 @@ function main(opts) {
         control.JobsForNodes(graph_info.num_nodes, type+'D');
       } else {
         // Randomly select sample_size from a list
-        data.sample_size = sample_size;
+        graph_info.sample_size = sample_size;
         var rand = new GroupPermutation(graph_info.num_nodes);
         control.JobsForNodes(sample_size, type+'D', function(i) {
           return rand.get(i);
