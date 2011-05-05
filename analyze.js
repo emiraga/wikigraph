@@ -255,9 +255,8 @@ function JobMonitor(redis, redis_block) {
   this.redis_block = redis_block;
   this.wait_milisec = 1000 * WAIT_SECONDS;
   this.waittime_job = {};  // job specific wait time
-  this.ignore_list = {}; // ignore specific jobs
   this.monitor = false;
-  this.onevent = {job_complete:[]};
+  this.onevent = {};
 }
 JobMonitor.prototype.on = function(name, cb) {
   this.onevent[name].push(cb);
@@ -269,13 +268,10 @@ JobMonitor.prototype.Start = function(callback) {
   var _this = this;
   this.monitor = true;
   // Empty queues
-  _this.redis.ltrim('queue:jobs', 1, 0, function(err) {
+  this.redis.del('queue:jobs', 'queue:running', function(err) {
     if (err) throw err;
-    _this.redis.ltrim('queue:running', 1, 0, function(err) {
-      if (err) throw err;
-      _this._popqueue_block();
-      callback();
-    });
+    _this._popqueue_block();
+    callback();
   });
 };
 JobMonitor.prototype.Stop = function() {
@@ -297,24 +293,16 @@ JobMonitor.prototype._job_pop = function(err, result) {
   var _this = this;
   var wait = this.waittime_job[job] || this.wait_milisec;
 
-  if (!(job in this.ignore_list)) {
-    setTimeout(function(){
-      _this.redis.get('result:'+job, function(err,status) {
-        if (err) throw err;
-        if (status) {
-          // Trigger an event 'job_complete'
-          var handlers = _this.onevent.job_complete;
-          for(var i=0; i<handlers.length; i++) {
-            handlers[i](job,status);
-          }
-        } else {
-          // Job is lost, push it back into the run-queue
-          _this.redis.lpush('queue:jobs',job);
-          console.log('Re-scheduling job ' + job);
-        }
-      });
-    }, wait);
-  }
+  setTimeout(function(){
+    _this.redis.get('result:'+job, function(err,status) {
+      if (err) throw err;
+      if (!status) {
+        // Job is lost, push it back into the run-queue
+        _this.redis.lpush('queue:jobs',job);
+        console.log('Re-scheduling job ' + job);
+      }
+    });
+  }, wait);
 
   if (this.monitor) {
     this._popqueue_block();  // monitor queue for next job
@@ -340,18 +328,20 @@ Controller.prototype._RunJob = function(job, callback) {
   var _this = this;
   this.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
     _this.redis_pubsub.unsubscribe(channel);
+    console.log('Finished Job: '+job);
     callback(job, JSON.parse(msg));
   });
   // Push the job on queue
   this.redis.lpush('queue:jobs', job);
 };
 Controller.prototype.RunJob = function(job, callback) {
-  console.log('RunJob:' + job);
+  console.log('Running Job: ' + job);
   // Results are cached, check that first
   var _this = this;
   this.redis.get('result:'+job, function(err, result) {
     if(err) throw err;
     if (result) {
+      console.log('Finished Job (cache): '+job);
       callback(job, JSON.parse(result));
     } else {
       // Result is not in cache, issue a new job
@@ -365,7 +355,7 @@ Controller.prototype.RunJob = function(job, callback) {
  * @param map         OPTIONAL: callback a generator to provide nodes that need
  *                    processing. (Default: identity function).
  */
-Controller.prototype.JobsForNodes = function(num_nodes, command, map) {
+Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) {
   var node = 0;
   // Slow-start
   var bulksize = 5;
@@ -385,7 +375,7 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map) {
         }
         var endpoint = Math.min(num_nodes, node + bulksize);
         for(var i=node+1; i<= endpoint; i++) {
-          _this.redis.lpush('queue:jobs', command + map(i));
+          _this.RunJob(command + map(i), callback);
         }
         node = endpoint;
       }
@@ -652,8 +642,6 @@ function main(opts) {
   };
 
   // Get connected components
-  //monitor.ignore_list['aS'] = true;
-  //monitor.ignore_list['cS'] = true;
   monitor.waittime_job['aS'] = 30*1000;
   monitor.waittime_job['cS'] = 30*1000;
 
@@ -674,8 +662,6 @@ function main(opts) {
   };
 
   // Get PageRanks
-  //monitor.ignore_list['aR'] = true;
-  //monitor.ignore_list['cR'] = true;
   monitor.waittime_job['aR'] = 150*1000;
   monitor.waittime_job['cR'] = 150*1000;
 
@@ -713,37 +699,33 @@ function main(opts) {
       var graph_info = data[member_name];
 
       assert.strictEqual(graph_info.nodes_done, 0);
-
-      // Calculate count of distance between articles
-      monitor.on('job_complete', function(job, result) {
-        if (job[0] != type || job[1] != 'D') {
-          return; // only care about 'type' distances
-        }
-        var r = JSON.parse(result)
-        var node = parseInt(job.substr(2), 10);
-
-        if (r.error) {
-          graph_info.AddInvalidNode(node, r.error);
-        } else {
-          assert.strictEqual(r.count_dist[0], 1);
-          graph_info.AddNodeDist(node, r.count_dist);
-        }
-      });
-
       graph_info.on('all_done', callback);  // Articles
 
       if(!sample_size || sample_size >= graph_info.num_nodes) {
         // Process every node
-        graph_info.sample_size = graph_info.num_nodes;
-        control.JobsForNodes(graph_info.num_nodes, type+'D');
-      } else {
-        // Randomly select sample_size from a list
-        graph_info.sample_size = sample_size;
-        var rand = new GroupPermutation(graph_info.num_nodes);
-        control.JobsForNodes(sample_size, type+'D', function(i) {
-          return rand.get(i);
-        });
+        sample_size = graph_info.num_nodes;
       }
+
+      // Randomly select sample_size from a list
+      graph_info.sample_size = sample_size;
+      var rand = new GroupPermutation(graph_info.num_nodes);
+      control.JobsForNodes(sample_size, type+'D',
+        function(i) {
+          return rand.get(i);
+        },
+        function(job, result) {
+          if (job[0] != type || job[1] != 'D') {
+            throw new Error('wrong '+type+'D != '+job);
+          }
+          var node = parseInt(job.substr(2), 10);
+          if (result.error) {
+            graph_info.AddInvalidNode(node, result.error);
+          } else {
+            assert.strictEqual(result.count_dist[0], 1);
+            graph_info.AddNodeDist(node, result.count_dist);
+          }
+        }
+      );
     };
   };
 
@@ -814,7 +796,6 @@ function main(opts) {
           return data.interesting_nodes[i].node;
         },
         function set(i, in_degree, out_degree, count_dist) {
-          console.log(i);
           var node_data = data.interesting_nodes[i][member_name];
 
           node_data.in_degree = in_degree;
@@ -851,7 +832,6 @@ function main(opts) {
     fs.readFile('report/index.tpl', 'utf8', function(err, index_tpl) {
       if (err) throw err;
       data.enwiki = "http://en.wikipedia.org/wiki/";
-      console.log(data);
       var cont = tmpl(index_tpl, data);
       fs.writeFile('report/index.html', cont, function (err) {
         if (err) throw err;
@@ -877,16 +857,16 @@ function main(opts) {
 
   if (opts.load) {
     // Alternative process, previous data is loaded from state file
-    var process = new Processing(
+    var proc = new Processing(
       [load_state],
       [write_report, redis_close]
     );
-    process.run();
+    proc.run();
     return;
   }
 
   // Complete description of report generation process
-  var process = new Processing(
+  var proc = new Processing(
       [init_mutex],
       [init_monitor],
 
@@ -904,7 +884,7 @@ function main(opts) {
       [redis_close, stop_mutex_monitor, write_report, save_state],
       [function(){ process.exit(); }] // deadly!
   );
-  process.run();
+  proc.run();
 };
 
 // {{{ tav module - Brain-free command-line options parser for node.js

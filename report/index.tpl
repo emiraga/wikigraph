@@ -162,8 +162,6 @@
     </ol>
     -->
 
-    <hr />
-
     <h2>Category links: Minimum distance</h2>
  
     <p>This data is based on random sampling of <%=cat.nodes_done%> (<%=(100*cat.nodes_done/cat.num_nodes).toFixed(1)%>%) nodes.</p>
@@ -188,6 +186,7 @@
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,cat.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=cat.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
     <div class="imglabel">Distance spectrum (category links).</div>
 
+    <!--
     <h2>Closeness centrality with category links</h2>
     <table width="100%" border="0">
       <tbody>
@@ -201,7 +200,7 @@
         <% } %>
       </tbody>
     </table>
-
+    -->
     <hr />
 
     <h2>Interactive</h2>
