@@ -34,7 +34,8 @@ void print_help(char *prg) {
   printf("Visit https://github.com/emiraga/wikigraph for more info.\n");
 }
 
-string graph_command(char *job, node_t node, CompleteGraphAlgo *graph, uint32_t num_nodes, bool verbose) {
+string graph_command(char *job, node_t node, CompleteGraphAlgo *graph,
+    uint32_t num_nodes, bool verbose) {
   string result;
   switch (job[0]) {
     case 'D': {  // count distances from node
@@ -50,7 +51,8 @@ string graph_command(char *job, node_t node, CompleteGraphAlgo *graph, uint32_t 
     case 'I': {  // Degree info
       pii degrees = graph->DegreeInfo(node);
       char msg[50];
-      snprintf(msg, sizeof(msg), "{\"in_degree\":%"PRIu32",\"out_degree\":%"PRIu32"}",
+      snprintf(msg, sizeof(msg),
+          "{\"in_degree\":%"PRIu32",\"out_degree\":%"PRIu32"}",
           degrees.first, degrees.second);
       result = string(msg);
     }
@@ -101,7 +103,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Next three sections should be called before fork()'s to 
+  // Next three sections should be called before fork()'s to
   // save memory (copy-on-write)
   printf("Loading...");
   fflush(stdout);
@@ -134,7 +136,9 @@ int main(int argc, char *argv[]) {
     perror("fopen");
     exit(1);
   }
-  CompleteGraphAlgo art_graph(&f_art, &is_category);  // Category nodes are invalid
+
+  // Category nodes are invalid
+  CompleteGraphAlgo art_graph(&f_art, &is_category);
   art_graph.Init();
   f_art.close();
 
@@ -200,11 +204,11 @@ int main(int argc, char *argv[]) {
     string result;
     bool no_result = false;
 
-    switch(job[0]) {
+    switch (job[0]) {
       // command
-      case 'a': { // for articles graph
+      case 'a': {  // for articles graph
         node_t node = 0;
-        if(isdigit(job[2])) {
+        if (isdigit(job[2])) {
           node = atoi(job+2);
           if (node < 1 || node > num_nodes) {
             result = "{\"error\":\"Node out of range\"}";
@@ -219,9 +223,9 @@ int main(int argc, char *argv[]) {
       }
       break;
       // command
-      case 'c': { // for categories graph
+      case 'c': {  // for categories graph
         node_t node = 0;
-        if(isdigit(job[2])) {
+        if (isdigit(job[2])) {
           node = atoi(job+2);
           if (node < 1 || node > num_nodes) {
             result = "{\"error\":\"Node out of range\"}";

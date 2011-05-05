@@ -57,9 +57,10 @@ bool BW_write_bit2(const void *p) {
 TEST(BufferedWriter, write_bit2) {
   InSequence seq;
   MockFile s;
-  EXPECT_CALL(s, write(Truly(BW_write_bit2), 4, 1)).Times(1).WillOnce(Return(1));
+  EXPECT_CALL(s, write(Truly(BW_write_bit2), 4, 1))
+    .Times(1).WillOnce(Return(1));
   BufferedWriter b(&s);
-  for(int i=0;i<13;i++)
+  for (int i = 0; i < 13; i++)
     b.write_bit(false);
   b.write_bit(true);
 }

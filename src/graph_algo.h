@@ -143,7 +143,7 @@ class CompleteGraphAlgo {
 #ifdef DEBUG
       printf("processing node %d\n", k);
 #endif
-      if(invalid_node_ && invalid_node_->get_value(k))
+      if (invalid_node_ && invalid_node_->get_value(k))
         continue;
 
       // This node should not be previously visited /*and not be a category*/
@@ -302,13 +302,9 @@ class CompleteGraphAlgo {
       node_t *end = &graph_.edges[graph_.end(node)];
       for ( ; target < end; target++) {
         // link is from (node) to (*target)
-
-        if(*target == info_node) {
+        if (*target == info_node) {
           in_degree++;
         }
-
-        // Checking the sanity of graph
-        assert(invalid_node_ == NULL || invalid_node_->get_value(*target) == false);
       }
     }
     return pii(in_degree, out_degree);
@@ -320,9 +316,9 @@ class CompleteGraphAlgo {
       node_t *end = &graph_.edges[graph_.end(node)];
       for ( ; target < end; target++) {
         // link is from (node) to (*target)
- 
         // Checking that there are no links to invalid nodes
-        assert(invalid_node_ == NULL || invalid_node_->get_value(*target) == false);
+        assert(invalid_node_ == NULL
+            || invalid_node_->get_value(*target) == false);
       }
     }
   }
