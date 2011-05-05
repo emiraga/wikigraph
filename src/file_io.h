@@ -17,7 +17,7 @@
 
 namespace wikigraph {
 
-const unsigned int kBufferSize = 1024*1024;  // for buffered reader and writer
+const unsigned int kBufferSize = 8*1024*1024;  // for buffered reader and writer
 
 class File {
  public:
