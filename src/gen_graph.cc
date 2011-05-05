@@ -269,6 +269,8 @@ void PageHandler::data(const vector<string> &data) {
   } else {
     graphId = ++g_info.graph_nodes_count;
 
+    assert(graphId <= MAX_NODEID);
+
     bool node_is_cat = namespc == NS_CATEGORY;
     g_nodeIsCat[graphId] = node_is_cat;
     is_cat_->write_bit(node_is_cat);
@@ -445,7 +447,11 @@ void RedirectHandler::data(const vector<string> &data) {
     // Target is valid page (or resolved redirect)
     //int graphId = atoi(reply->str);
     int graphId = g_name2graphId[title];
-    assert(graphId >= 1 && graphId <= MAX_NODEID);
+    if(graphId < 1) {
+      fprintf(stderr, "Inconsitency: Page not found %s\n", title.c_str());
+      return;  // Nothing scary, mysqldump take time to perform, leaving dumps at potentially inconsistent state
+    }
+    assert(graphId <= MAX_NODEID);
 
     // freeReplyObject(reply);
     // Need to get prefix:hash_key of a page based on its wikiId
@@ -461,7 +467,6 @@ void RedirectHandler::data(const vector<string> &data) {
     //    "SET %s %d", prefix_hash.c_str(), graphId);
     //freeReplyObject(reply);
     g_name2graphId[prefix_hash] = graphId;
-
 
     g_wikistatus[wikiId].type = WikiStatus::RESOLVED;  // Resolved redirect
     g_wikigraphId[wikiId] = graphId;
