@@ -3,7 +3,7 @@ var redisnode = require("redis-node");
 var fs = require("fs");
 
 // {{{ config
-var WAIT_SECONDS = 3; // for jobs to complete
+var WAIT_SECONDS = 6; // for jobs to complete
 var KEEP_CLOSEST = 100; // articles
 var RANDOM_ARTICLES = 100; // Randomly sample X articles, put 0 for all articles
 var RANDOM_CATEGORIES = 0; // Randomly sample X categories, put 0 for all categories
@@ -576,7 +576,6 @@ Processing.prototype._parallel = function(jobs, callback) {
 function GroupPermutation(n) {
   this.n = n;
   this.s = 1 + Math.floor(Math.random()*n);
-  d(this.n, this.s);
   while(this._gcd(this.s, this.n) != 1) {
     this.s += 1;
   }
@@ -728,7 +727,7 @@ function main(opts) {
       } else {
         // Randomly select sample_size from a list
         data.sample_size = sample_size;
-        var rand = new GroupPermutation(data.num_nodes);
+        var rand = new GroupPermutation(graph_info.num_nodes);
         control.JobsForNodes(sample_size, type+'D', function(i) {
           return rand.get(i);
         });

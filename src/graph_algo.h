@@ -257,7 +257,7 @@ class CompleteGraphAlgo {
         printf("Delta: %lf\n", delta);
       }
 
-      if (delta < 1e-4)
+      if (delta < 1e-3)
         break;
     }
 
