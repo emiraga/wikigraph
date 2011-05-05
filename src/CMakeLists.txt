@@ -1,5 +1,6 @@
 cmake_minimum_required ( VERSION 2.6 )
-add_definitions ( -Wall -fstrict-aliasing -Wstrict-aliasing=2 -DDEBUG -g -ggdb )
+add_definitions ( -Wall -fstrict-aliasing -Wstrict-aliasing=2 )
+
 find_package (Threads)
 find_library(ZLIB z "Zlib library")
 
