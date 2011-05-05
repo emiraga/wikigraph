@@ -3,7 +3,7 @@ var redisnode = require("redis-node");
 var fs = require("fs");
 
 // {{{ config
-var WAIT_SECONDS = 1; // for jobs to complete
+var WAIT_SECONDS = 3; // for jobs to complete
 var KEEP_CLOSEST = 100; // articles
 var RANDOM_ARTICLES = 100; // Randomly sample X articles, put 0 for all articles
 var RANDOM_CATEGORIES = 0; // Randomly sample X categories, put 0 for all categories
@@ -255,6 +255,7 @@ function JobMonitor(redis, redis_block) {
   this.redis_block = redis_block;
   this.wait_milisec = 1000 * WAIT_SECONDS;
   this.waittime_job = {};  // job specific wait time
+  this.ignore_list = {}; // ignore specific jobs
   this.monitor = false;
   this.onevent = {job_complete:[]};
 }
@@ -293,22 +294,24 @@ JobMonitor.prototype._job_pop = function(err, result) {
   var _this = this;
   var wait = this.waittime_job[job] || this.wait_milisec;
 
-  setTimeout(function(){
-    _this.redis.get('result:'+job, function(err,status) {
-      if (err) throw err;
-      if (status) {
-        // Trigger an event 'job_complete'
-        var handlers = _this.onevent.job_complete;
-        for(var i=0; i<handlers.length; i++) {
-          handlers[i](job,status);
+  if (!(job in this.ignore_list)) {
+    setTimeout(function(){
+      _this.redis.get('result:'+job, function(err,status) {
+        if (err) throw err;
+        if (status) {
+          // Trigger an event 'job_complete'
+          var handlers = _this.onevent.job_complete;
+          for(var i=0; i<handlers.length; i++) {
+            handlers[i](job,status);
+          }
+        } else {
+          // Job is lost, push it back into the run-queue
+          _this.redis.lpush('queue:jobs',job);
+          console.log('Re-scheduling job ' + job);
         }
-      } else {
-        // Job is lost, push it back into the run-queue
-        _this.redis.lpush('queue:jobs',job);
-        console.log('Re-scheduling job ' + job);
-      }
-    });
-  }, wait);
+      });
+    }, wait);
+  }
 
   if (this.monitor) {
     this._popqueue_block();  // monitor queue for next job
@@ -573,6 +576,7 @@ Processing.prototype._parallel = function(jobs, callback) {
 function GroupPermutation(n) {
   this.n = n;
   this.s = 1 + Math.floor(Math.random()*n);
+  d(this.n, this.s);
   while(this._gcd(this.s, this.n) != 1) {
     this.s += 1;
   }
@@ -646,6 +650,10 @@ function main(opts) {
     });
   };
 
+  // Get connected components
+  monitor.ignore_list['aS'] = true;
+  monitor.ignore_list['cS'] = true;
+
   var init_compute_art_scc = function(callback) {
     control.RunJob('aS', function(job, result) {
       data.art.SetSCC(result.components);
@@ -661,7 +669,8 @@ function main(opts) {
   };
 
   // Get PageRanks
-  //monitor.waittime_job['aR'] = monitor.waittime_job['cR'] = 30 * 1000; // this job may take longer time than normal
+  monitor.ignore_list['aR'] = true;
+  monitor.ignore_list['cR'] = true;
 
   /**
    * @param type        'a' or 'c'
