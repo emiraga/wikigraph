@@ -153,11 +153,20 @@
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,art.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=art.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
     <div class="imglabel">Distance spectrum (article links).</div>
 
+    <!--
+    <h2>Closeness centrality</h2>
+    <ol>
+    <% for ( var i = 0; i != art.close_centr.length; i++ ) { %>
+      <li><a href="<%=enwiki+art.close_centr[i].name%>"><%=art.close_centr[i].name%> (<%=art.close_centr[i].avg_dist.toFixed(3)%>)</a></li>
+    <% } %>
+    </ol>
+    -->
+
     <hr />
 
     <h2>Category links: Minimum distance</h2>
  
-    This data is based on random sampling of <%=cat.nodes_done%> (<%=(100*cat.nodes_done/cat.num_nodes).toFixed(1)%>%) nodes.
+    <p>This data is based on random sampling of <%=cat.nodes_done%> (<%=(100*cat.nodes_done/cat.num_nodes).toFixed(1)%>%) nodes.</p>
 
     <table border="0" width="400px">
       <tbody>
@@ -166,9 +175,32 @@
       </tbody>
     </table>
 
+    <p>An example of path using category links: <br />
+      <a href="http://en.wikipedia.org/wiki/Sarajevo">Sarajevo</a> &#8658;
+      <a href="http://en.wikipedia.org/wiki/Category:Capitals_in_Europe">Category:Capitals_in_Europe</a> &#8658;
+      <a href="http://en.wikipedia.org/wiki/Prague">Prague</a> <br />&#8658;
+      <a href="http://en.wikipedia.org/wiki/Category:Cities_and_towns_in_the_Czech_Republic">Category:Cities_and_towns_in_the_Czech_Republic</a> &#8658;
+      <a href="http://en.wikipedia.org/wiki/Category:Karlovy_Vary">Category:Karlovy_Vary</a> &#8658;
+      <a href="http://en.wikipedia.org/wiki/Grandhotel_Pupp">Grandhotel_Pupp</a>
+    </p>
+
     <p>Distance between nodes following only category links:</p>
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,cat.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=cat.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
     <div class="imglabel">Distance spectrum (category links).</div>
+
+    <h2>Closeness centrality with category links</h2>
+    <table width="100%" border="0">
+      <tbody>
+        <tr>
+          <th>Nodes<th>Average distace
+        </tr>
+        <% for ( var i = 0; i != cat.close_centr.length; i++ ) { var info = cat.close_centr[i]; %>
+          <tr rel="node<%=info.node%>" >
+            <td><a href="<%=enwiki+cat.close_centr[i].name%>"><%=cat.close_centr[i].name%></a><td> (<%=cat.close_centr[i].avg_dist.toFixed(3)%>)
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
 
     <hr />
 
@@ -191,14 +223,6 @@
       <pre>$ git clone git://github.com/emiraga/wikigraph</pre>
     </p>
 
-    <!--
-    <h2>Closeness centrality</h2>
-    <ol>
-    <% for ( var i = 0; i != art.close_centr.length; i++ ) { %>
-      <li><a href="<%=enwiki+art.close_centr[i].name%>"><%=art.close_centr[i].name%> (<%=art.close_centr[i].avg_dist.toFixed(3)%>)</a></li>
-    <% } %>
-    </ol>
-    -->
 
     <div class="footer">
       get the source code on GitHub : <a href="http://github.com/emiraga/wikigraph">emiraga/wikigraph</a>
