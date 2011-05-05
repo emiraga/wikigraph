@@ -11,6 +11,9 @@
 #include "hash.h"
 #include "graph.h"
 
+#include <google/dense_hash_map>
+using google::dense_hash_map;
+
 namespace wikigraph {
 
 // MediaWiki namespaces for articles and categories
@@ -55,6 +58,22 @@ struct WikiGraphInfo {
 } g_info;
 
 bool g_nodeIsCat[MAX_NODEID];
+
+struct BKDRHash {
+  size_t operator()(const string& str) const {
+    size_t seed = 131; // 31 131 1313 13131 131313 etc..
+    size_t hash = 0;
+
+    for(std::size_t i = 0; i < str.size(); i++) {
+      hash = (hash * seed) + str[i];
+    }
+    return hash;
+  }
+};
+
+dense_hash_map<string, int, BKDRHash> g_redirName2wiki;
+dense_hash_map<string, int, BKDRHash> g_name2graphId;
+dense_hash_map<int, string> g_wiki2redirName;
 
 }  // namespace
 
@@ -211,6 +230,7 @@ void PageHandler::data(const vector<string> &data) {
   assert(wikiId <= MAX_WIKI_PAGEID);
 
   const char *prefix;
+
   if (namespc == NS_MAIN) {  // Articles
     prefix = "a:";
     if (is_redir) {
@@ -230,19 +250,21 @@ void PageHandler::data(const vector<string> &data) {
     return;  // Other namespaces are not interesting
   }
 
-  ComputeHash hash;
-  const char *title = data[page_title].c_str();
-  hash.ProcessString(title, data[page_title].size());
+  //ComputeHash hash;
+  //const char *title = data[page_title].c_str();
+  //hash.ProcessString(title, data[page_title].size());
+  string title = prefix + data[page_title];
 
-  redisReply *reply;
+  //redisReply *reply;
 
   int graphId = -1;
   if (is_redir) {
-    reply = redisCmd(redis_,
-        "SETNX %s%s w:%d", prefix, hash.get_hash(), wikiId);
+    g_redirName2wiki[title] = wikiId;
+    //reply = redisCmd(redis_,
+    //    "SETNX %s%s w:%d", prefix, hash.get_hash(), wikiId);
+
 #ifdef DEBUG
-    printf("redirect %s%s  key=%s%s (wikiId=%d)\n",
-        prefix, title, prefix, hash.get_hash(), wikiId);
+    printf("redirect %s (wikiId=%d)\n", title.c_str(), wikiId);
 #endif
   } else {
     graphId = ++g_info.graph_nodes_count;
@@ -251,27 +273,29 @@ void PageHandler::data(const vector<string> &data) {
     g_nodeIsCat[graphId] = node_is_cat;
     is_cat_->write_bit(node_is_cat);
 
-    reply = redisCmd(redis_,
-        "SETNX %s%s %d", prefix, hash.get_hash(), graphId);
+    //reply = redisCmd(redis_,
+    //    "SETNX %s%s %d", prefix, hash.get_hash(), graphId);
+    g_name2graphId[title] = graphId;
 #ifdef DEBUG
-    printf("graph[%d] = %s%s (wikiId=%d)\n", graphId, prefix, title, wikiId);
+    printf("graph[%d] = %s (wikiId=%d)\n", graphId, title.c_str(), wikiId);
 #endif
   }
-  if (reply->integer != 1) {
-    freeReplyObject(reply);
-    printf("Collission found!\nHow to fix?\n 1.Empty the database,\n");
-    printf("2. Try adding salt to md5, or increase keylen.\n");
-    printf("Title:'%s' hash_key=%s\n", title, hash.get_hash());
+  //if (reply->integer != 1) {
+  //  freeReplyObject(reply);
+  //  printf("Collission found!\nHow to fix?\n 1.Empty the database,\n");
+  //  printf("2. Try adding salt to md5, or increase keylen.\n");
+  //  printf("Title:'%s' hash_key=%s\n", title, hash.get_hash());
 
-    exit(1);
-  }
-  freeReplyObject(reply);
+  //  exit(1);
+  //}
+  //freeReplyObject(reply);
 
   if (is_redir) {
     g_wikistatus[wikiId].type = WikiStatus::REDIRECT;
-    reply = redisCmd(redis_,
-        "SET w:%d %s%s", wikiId, prefix, hash.get_hash());
-    freeReplyObject(reply);
+    //reply = redisCmd(redis_,
+    //    "SET w:%d %s%s", wikiId, prefix, hash.get_hash());
+    g_wiki2redirName[wikiId] = title;
+    //freeReplyObject(reply);
   } else {
     g_wikistatus[wikiId].type = WikiStatus::REGULAR;
     g_wikigraphId[wikiId] = graphId;
@@ -387,50 +411,66 @@ void RedirectHandler::data(const vector<string> &data) {
   int namespc = atoi(data[rd_namespace].c_str());
 
   const char *prefix;
-  if (namespc == NS_MAIN)  // Articles
+  if (namespc == NS_MAIN) {  // Articles
     prefix = "a:";
-  else if (namespc == NS_CATEGORY)  // Categories
+  } else if (namespc == NS_CATEGORY) {  // Categories
     prefix = "c:";
-  else
+  } else {
     return;  // Other namespaces are not interesting
+  }
 
-  ComputeHash hash;
-  const char *title = data[rd_title].c_str();
-  hash.ProcessString(title, data[rd_title].size());
+  //ComputeHash hash;
+  //const char *title = data[rd_title].c_str();
+  //hash.ProcessString(title, data[rd_title].size());
+  string title = prefix + data[rd_title];
 
 #ifdef DEBUG
-  printf("(wikiId=%d) redirected to %s%s\n", wikiId, prefix, title);
+  printf("(wikiId=%d) redirected to %s\n", wikiId, title.c_str());
 #endif
 
   // Check target
-  redisReply *reply;
-  reply = redisCmd(redis_,
-      "GET %s%s", prefix, hash.get_hash());
+  //redisReply *reply;
+  //reply = redisCmd(redis_,
+  //    "GET %s%s", prefix, hash.get_hash());
 
-  if (reply->type == REDIS_REPLY_NIL || !isdigit(reply->str[0])) {
-    freeReplyObject(reply);
+  //if (reply->type == REDIS_REPLY_NIL || !isdigit(reply->str[0])) {
+  if (g_redirName2wiki.find(title) != g_redirName2wiki.end()) {
+    // freeReplyObject(reply);
     // Target is still a redirect
+#ifdef DEBUG
+    printf("this is still a redirect %s (wikiId=%d)\n", title.c_str(), g_redirName2wiki[title]);
+#endif
     unresolved_redir_count++;
   } else {
     // Target is valid page (or resolved redirect)
-    int graphId = atoi(reply->str);
-    freeReplyObject(reply);
-    // Need to get prefix:hash_key of a page based on its wikiId
-    reply = redisCmd(redis_, "GET w:%d", wikiId);
-    assert(reply->type == REDIS_REPLY_STRING && reply->str[1] == ':');
-    string prefix_hash(reply->str);
-    freeReplyObject(reply);
+    //int graphId = atoi(reply->str);
+    int graphId = g_name2graphId[title];
+    assert(graphId >= 1 && graphId <= MAX_NODEID);
 
-    reply = redisCmd(redis_,
-        "SET %s %d", prefix_hash.c_str(), graphId);
-    freeReplyObject(reply);
+    // freeReplyObject(reply);
+    // Need to get prefix:hash_key of a page based on its wikiId
+    //reply = redisCmd(redis_, "GET w:%d", wikiId);
+    //assert(reply->type == REDIS_REPLY_STRING && reply->str[1] == ':');
+    //string prefix_hash(reply->str);
+    //freeReplyObject(reply);
+    string prefix_hash = g_wiki2redirName[wikiId];
+    assert(prefix_hash.size() > 0);
+
+    assert(g_name2graphId.find(prefix_hash) == g_name2graphId.end());
+    //reply = redisCmd(redis_,
+    //    "SET %s %d", prefix_hash.c_str(), graphId);
+    //freeReplyObject(reply);
+    g_name2graphId[prefix_hash] = graphId;
+
 
     g_wikistatus[wikiId].type = WikiStatus::RESOLVED;  // Resolved redirect
     g_wikigraphId[wikiId] = graphId;
 
     // This key is no longer needed
-    reply = redisCmd(redis_, "DEL w:%d", wikiId);
-    freeReplyObject(reply);
+    //reply = redisCmd(redis_, "DEL w:%d", wikiId);
+    g_wiki2redirName.erase(wikiId);
+    g_redirName2wiki.erase(prefix_hash);
+    //freeReplyObject(reply);
   }
 }  // DataHandler::data
 
@@ -549,27 +589,30 @@ void PageLinkHandler::data(const vector<string> &data) {
     return;  // Other namespaces are not interesting
   }
 
-  ComputeHash hash;
-  const char *title = data[pl_title].c_str();
-  hash.ProcessString(title, data[pl_title].size());
+  //ComputeHash hash;
+  //const char *title = data[pl_title].c_str();
+  //hash.ProcessString(title, data[pl_title].size());
+  string title = prefix + data[pl_title];
 
-  redisReply *reply;
-  reply = redisCmd(redis_,
-      "GET %s%s", prefix, hash.get_hash());
-  if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
-    int to_graphId = atoi(reply->str);
+  //redisReply *reply;
+  //reply = redisCmd(redis_,
+  //    "GET %s%s", prefix, hash.get_hash());
 
+  int to_graphId = g_name2graphId[title];
+//if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
+  if (to_graphId > 0) {
+    //int to_graphId = atoi(reply->str);
     assert(g_nodeIsCat[to_graphId] == false);
 
 #ifdef DEBUG
-  printf("link from graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
-      from_graphId, wikiId, prefix, title, to_graphId,
+  printf("link from graphId=%d (wikiId=%d)  to=%s graphId=%d  type=%d\n",
+      from_graphId, wikiId, title.c_str(), to_graphId,
       g_wikistatus[to_graphId].type);
 #endif
     g_info.article_links_count++;
     graph_->add_edge(to_graphId);
   }
-  freeReplyObject(reply);
+  //freeReplyObject(reply);
 }  // DataHandler::data
 
 }  // namespace stage3
@@ -661,26 +704,31 @@ void CategoryLinksHandler::data(const vector<string> &data) {
 
   const char *prefix = "c:";  // target is always a category
 
-  ComputeHash hash;
-  const char *title = data[cl_to].c_str();
-  hash.ProcessString(title, data[cl_to].size());
+  //ComputeHash hash;
+  //const char *title = data[cl_to].c_str();
+  //hash.ProcessString(title, data[cl_to].size());
+  string title = prefix + data[cl_to];
 
-  redisReply *reply;
-  reply = redisCmd(redis_, "GET %s%s", prefix, hash.get_hash());
-  if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
-    int to_graphId = atoi(reply->str);
-    freeReplyObject(reply);
+  //redisReply *reply;
+  //reply = redisCmd(redis_, "GET %s%s", prefix, hash.get_hash());
+
+  int to_graphId = g_name2graphId[title];
+
+  //if (reply->type != REDIS_REPLY_NIL && isdigit(reply->str[0])) {
+  if(to_graphId > 0) {
+    //int to_graphId = atoi(reply->str);
+    //freeReplyObject(reply);
 
 #ifdef DEBUG
-  printf("categorylink: graphId=%d (wikiId=%d)  to=%s%s graphId=%d  type=%d\n",
-    from_graphId, wikiId, prefix, title, to_graphId,
+  printf("categorylink: graphId=%d (wikiId=%d)  to=%s graphId=%d  type=%d\n",
+    from_graphId, wikiId, title.c_str(), to_graphId,
     g_wikistatus[to_graphId].type);
 #endif
     g_info.category_links_count++;
 
     graph_->add_edge(to_graphId);
   } else {
-    freeReplyObject(reply);
+    //freeReplyObject(reply);
   }
 }  // DataHandler::data
 
@@ -781,6 +829,12 @@ class Stage6 : public Stage {
 }  // namespace wikigraph
 
 int main(int argc, char *argv[]) {
+  wikigraph::g_name2graphId.set_empty_key("");
+  wikigraph::g_redirName2wiki.set_empty_key("");
+  wikigraph::g_redirName2wiki.set_deleted_key("~__deleted_key__~");
+  wikigraph::g_wiki2redirName.set_empty_key(0);
+  wikigraph::g_wiki2redirName.set_deleted_key(-1);
+
   redisContext *redis = NULL;
 #ifdef REDIS_UNIXSOCKET
   redis = redisConnectUnix(REDIS_UNIXSOCKET);

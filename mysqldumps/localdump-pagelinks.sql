@@ -38,7 +38,7 @@ CREATE TABLE `pagelinks` (
 
 LOCK TABLES `pagelinks` WRITE;
 /*!40000 ALTER TABLE `pagelinks` DISABLE KEYS */;
-INSERT INTO `pagelinks` VALUES (1,14,'Main_category'),(3,0,'P1'),(4,0,'P1'),(5,0,'P1'),(6,0,'MESH2'),(6,0,'MESH4'),(6,0,'MESH7'),(7,0,'MESH3'),(8,0,'MESH1'),(9,0,'MESH5'),(9,0,'MESH6'),(10,0,'MESH4'),(11,0,'MESH1'),(12,0,'MESH4'),(12,0,'MESH5'),(12,0,'MESH6'),(14,0,'Main_Page');
+INSERT INTO `pagelinks` VALUES (1,14,'Main_category'),(3,0,'P1'),(4,0,'P1'),(5,0,'P1'),(6,0,'MESH2'),(6,0,'MESH4'),(6,0,'MESH7'),(7,0,'MESH3'),(8,0,'MESH1'),(9,0,'MESH5'),(9,0,'MESH6'),(10,0,'MESH4'),(11,0,'MESH1'),(12,0,'MESH4'),(12,0,'MESH5'),(12,0,'MESH6'),(14,0,'Main_Page'),(15,0,'REDIR2'),(16,0,'REDIR3'),(17,0,'Real_page'),(19,0,'REDIR1');
 /*!40000 ALTER TABLE `pagelinks` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -51,4 +51,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2011-05-05  5:40:41
+-- Dump completed on 2011-05-05 12:50:26
