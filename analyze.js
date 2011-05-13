@@ -4,9 +4,9 @@ var fs = require("fs");
 
 // {{{ config
 var WAIT_SECONDS = 7; // for jobs to complete
-var KEEP_CLOSEST = 1; // nodes
-var RANDOM_ARTICLES = 10; // Randomly sample X nodes, put 0 for all nodes
-var RANDOM_CATEGORIES = 10; // Randomly sample X nodes, put 0 for all nodes
+var KEEP_CLOSEST = 20; // nodes
+var RANDOM_ARTICLES = 0; // Randomly sample X nodes, put 0 for all nodes
+var RANDOM_CATEGORIES = 0; // Randomly sample X nodes, put 0 for all nodes
 // }}}
 
 // {{{ tmpl - micro-templates for javascript

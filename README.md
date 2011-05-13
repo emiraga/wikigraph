@@ -74,11 +74,11 @@ And finally start controller for the whole process
 
     node analyze.js
 
-This will issue jobs, record the results and write an html report.
+This will issue jobs, record the results and write a html report.
 
 Assumptions
 -----------
-* Least 1.5GB of RAM, since I have that much on my computer. 
-* Program is compiled and run as 32bit little-endian (Maybe 64bit works as well, I did not try it myself).
+* At Least 1.5GB of RAM.
+* Program is compiled and run as 32bit. (Maybe 64bit works as well, I did not try it myself.)
 * `pagelinks.sql` and `categorylinks.sql` are exported with sorting `mysqldump --order-by-primary`
 

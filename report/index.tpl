@@ -9,12 +9,13 @@
     body { margin-top: 1.0em; background-color: #c7dbfe;
       font-family: "Helvetica,Arial,FreeSans"; color: #000000; }
     #container { margin: 0 auto; width: 700px; }
-    h1 { font-size: 2.8em; color: #b87441; margin-bottom: 3px; }
+    h1.title { font-size: 2.8em; color: #b87441; margin-bottom: 3px; }
     h1 .small { font-size: 0.4em; }
     h1 a { text-decoration: none; }
-    h2 { font-size: 1.5em; color: #b87441; }
+    h2 { font-size: 1.5em; /*color: #b87441;*/ }
     h3 { text-align: center; color: #b87441; }
     a { color: black; }
+    a:hover { color: red !important; }
     .description { font-size: 1.2em; margin-bottom: 30px; margin-top: -1px; font-style: italic;}
     .download { float: right; }
     pre { background: #000; color: #fff; padding: 15px;}
@@ -43,6 +44,7 @@
     tr:hover { background-color: #c7cbee; }
     .imglabel { text-align: center; font-size: 14px; }
     img.figure { border: 1px solid black; }
+    .note { /*background-color: white;*/ border: 1px solid gray; }
   </style>
   <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
 </head>
@@ -62,7 +64,7 @@
     </div>
     -->
 
-    <h1><a href="http://github.com/emiraga/wikigraph">wikigraph</a>
+    <h1 class="title"><a href="http://github.com/emiraga/wikigraph">wikigraph</a>
       <span class="small">by <a href="https://github.com/emiraga">emiraga</a></span></h1>
 
     <div class="description">
@@ -81,9 +83,9 @@
     <tbody>
       <tr><th>Year<th>2007<th>2011</tr>
       <tr><th>Articles<td>2301486<td><%=art.num_articles%></tr>
-      <tr><th>Article links<td>55550003<td><%=art.num_links%></tr>
+      <tr><th>Article links (AL)<td>55550003<td><%=art.num_links%></tr>
       <tr><th>Categories<td><td><%=cat.num_categories%></tr>
-      <tr><th>Category links<td><td><%=cat.num_links%></tr>
+      <tr><th>Category links (CL)<td><td><%=cat.num_links%></tr>
       <tr><th><abbr title="Articles+Categories">All nodes</abbr><td><td><%=art.num_nodes%></tr>
     </tbody>
     </table>
@@ -96,11 +98,11 @@
     -->
 
     <p>
-      For instance, article "Penny Can" has 3 outgoing <u>article links</u> and 2 <u>category links</u>. Former are directed whereas latter are undirected.
-      Each article or category is one <u>node</u> in a graph.
+      For instance, article "Penny Can" has 3 outgoing <b>article links</b> (AL) and 2 <b>category links</b> (CL). Former are directed whereas latter are undirected.
+      Each <b>article</b> or <b>category</b> is one <b>node</b> in a graph.
     </p>
     <img class="figure" src="http://i.imgur.com/iCJx9.png" />
-    <div class="imglabel">Sample node with 3 article and 2 category links.</div>
+    <div class="imglabel">Sample node with 3 AL and 2 CL.</div>
 
     <h2>Article PageRank</h2>
 
@@ -115,11 +117,11 @@
       </tbody>
     </table>
     <p>
-      <a href="http://en.wikipedia.org/wiki/PageRank">PageRank</a> is probability that surfer of will be located at a particular article, following article links randomly.
+      <a href="http://en.wikipedia.org/wiki/PageRank">PageRank</a> is probability that surfer of will be located at a particular article, following ALs randomly.
       For technical reasons, links from one article to another are counted just once (no duplicates).
     </p>
 
-    <h2>Strongly connected components (Articles)</h2>
+    <h2>Strongly connected components</h2>
 
     <table border="0" width="300px">
       <tbody>
@@ -137,10 +139,11 @@
       Compared to reports from <a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
     </p>
 
-    <h2>Minimum distance between articles</h2>
+    <h2>Minimum distance (AL)</h2>
  
-    This data is based on random sampling of <%=art.nodes_done%> (<%=(100*art.nodes_done/art.num_nodes).toFixed(1)%>%) nodes.
-
+    <% if(art.nodes_done != art.num_nodes) { %>
+      This data is based on random sampling of <%=art.nodes_done%> (<%=(100*art.nodes_done/art.num_nodes).toFixed(1)%>%) nodes.
+    <% } %>
     <table border="0" width="400px">
       <tbody>
         <tr><th>Average reachable articles<td><%= (art.reachable_sum / art.nodes_done ).toFixed(2) %></th></tr>
@@ -148,24 +151,47 @@
       </tbody>
     </table>
 
-    <p>Distance between articles following only article links:</p>
+    <p>Distance between articles (AL):</p>
 
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,art.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=art.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
-    <div class="imglabel">Distance spectrum (article links).</div>
+    <div class="imglabel">Distance spectrum (AL).</div>
 
-    <!--
-    <h2>Closeness centrality</h2>
-    <ol>
-    <% for ( var i = 0; i != art.close_centr.length; i++ ) { %>
-      <li><a href="<%=enwiki+art.close_centr[i].name%>"><%=art.close_centr[i].name%> (<%=art.close_centr[i].avg_dist.toFixed(3)%>)</a></li>
-    <% } %>
-    </ol>
-    -->
 
-    <h2>Category links: Minimum distance</h2>
+    <h2>Closeness centrality (AL)</h2>
+
+    <table width="100%" border="0">
+      <tbody>
+        <tr>
+          <th>Nodes<th>Average distace
+        </tr>
+        <% for ( var i = 0; i != art.close_centr.length; i++ ) { var info = art.close_centr[i]; %>
+          <tr rel="node<%=info.node%>" >
+            <td><a href="<%=enwiki+art.close_centr[i].name%>"><%=art.close_centr[i].name%></a><td> (<%=art.close_centr[i].avg_dist.toFixed(3)%>)
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+
+    <hr />
+
+    <h1>Category links</h1>
+
+    <p>
+      Category links (CL) are essentially different from AL. Link is formed when one node (article/category) is declared to be in a category (see example at the top of the page). CL are undirected, i.e. node belongs to another category and category has nodes in it.
+    </p>
+    <p>
+      An example of CL path:
+      <a href="http://en.wikipedia.org/wiki/Prague">Prague</a> &#8658;
+      <a href="http://en.wikipedia.org/wiki/Category:Cities_and_towns_in_the_Czech_Republic">Category:Cities_and_towns_in_the_Czech_Republic</a> &#8658;
+      <a href="http://en.wikipedia.org/wiki/Category:Karlovy_Vary">Category:Karlovy_Vary</a> &#8658;
+      <a href="http://en.wikipedia.org/wiki/Grandhotel_Pupp">Grandhotel_Pupp</a>
+    </p>
+
+    <h2>Minimum distance (CL)</h2>
  
-    <p>This data is based on random sampling of <%=cat.nodes_done%> (<%=(100*cat.nodes_done/cat.num_nodes).toFixed(1)%>%) nodes.</p>
-
+    <% if(cat.nodes_done != cat.num_nodes) { %>
+      This data is based on random sampling of <%=cat.nodes_done%> (<%=(100*cat.nodes_done/cat.num_nodes).toFixed(1)%>%) nodes.
+    <% } %>
     <table border="0" width="400px">
       <tbody>
         <tr><th>Average reachable nodes<td><%= (cat.reachable_sum / cat.nodes_done ).toFixed(2) %></th></tr>
@@ -173,21 +199,12 @@
       </tbody>
     </table>
 
-    <p>An example of path using category links: <br />
-      <a href="http://en.wikipedia.org/wiki/Sarajevo">Sarajevo</a> &#8658;
-      <a href="http://en.wikipedia.org/wiki/Category:Capitals_in_Europe">Category:Capitals_in_Europe</a> &#8658;
-      <a href="http://en.wikipedia.org/wiki/Prague">Prague</a> <br />&#8658;
-      <a href="http://en.wikipedia.org/wiki/Category:Cities_and_towns_in_the_Czech_Republic">Category:Cities_and_towns_in_the_Czech_Republic</a> &#8658;
-      <a href="http://en.wikipedia.org/wiki/Category:Karlovy_Vary">Category:Karlovy_Vary</a> &#8658;
-      <a href="http://en.wikipedia.org/wiki/Grandhotel_Pupp">Grandhotel_Pupp</a>
-    </p>
+    <p>Distance between nodes (CL):</p>
 
-    <p>Distance between nodes following only category links:</p>
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,cat.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=cat.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
-    <div class="imglabel">Distance spectrum (category links).</div>
+    <div class="imglabel">Distance spectrum (CL).</div>
 
-    <!--
-    <h2>Closeness centrality with category links</h2>
+    <h2>Closeness centrality (CL)</h2>
     <table width="100%" border="0">
       <tbody>
         <tr>
@@ -200,7 +217,6 @@
         <% } %>
       </tbody>
     </table>
-    -->
 
     <!--
     <h2>Interactive</h2>
@@ -210,14 +226,28 @@
       <a href="http://en.wikipedia.org/wiki/Wikipedia:Six_degrees_of_Wikipedia#External_links">other tools</a> available for computing minimum distance.
     </p>
     -->
-    <h2>Download</h2>
+    <hr />
+
+    <h1>Conclusion</h1>
 
     <p>
-      You can download this project in either
+    Even though, average number of article links per one article has increased from 25 to 50, average distance today is larger compared to 2007.
+    This might indicate that additional links contribute to create highly connected clusters of nodes. Within one group of articles distances are
+    quite small (visible in the peak of &quot;distance spectrum&quot;), but distance to other groups is larger. Running 
+    <abbr title="Strongly connected components">SCC</abbr> algorithm did reveal only a few of such components, whereas majority are still in one giant
+    bundle of nodes. Resolving this issue would mean to cluster nodes into significantly smaller groups.
+    This could be a topic of further investigation (suggestions are welcome).
+    </p>
+
+    <p>
+    Graph with CL is a new concept that was not done before.
+    </p>
+
+    <p>
+      You can download source of this project in either
       <a href="http://github.com/emiraga/wikigraph/zipball/master">zip</a> or
       <a href="http://github.com/emiraga/wikigraph/tarball/master">tar</a> formats.
-    </p>
-    <p>You can also clone the project with <a href="http://git-scm.com">Git</a>
+      You can also clone the project with <a href="http://git-scm.com">Git</a>
       by running:
       <pre>$ git clone git://github.com/emiraga/wikigraph</pre>
     </p>
