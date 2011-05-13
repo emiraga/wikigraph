@@ -565,9 +565,9 @@ Processing.prototype._parallel = function(jobs, callback) {
 // }}}
 
 // {{{ class GroupPermutation
-function GroupPermutation(n) {
+function GroupPermutation(n, seed) {
   this.n = n;
-  this.s = 1 + Math.floor(Math.random()*n);
+  this.s = seed || (1 + Math.floor(Math.random()*n));
   while(this._gcd(this.s, this.n) != 1) {
     this.s += 1;
   }
@@ -708,7 +708,7 @@ function main(opts) {
 
       // Randomly select sample_size from a list
       graph_info.sample_size = sample_size;
-      var rand = new GroupPermutation(graph_info.num_nodes);
+      var rand = new GroupPermutation(graph_info.num_nodes, opts.seed);
       control.JobsForNodes(sample_size, type+'D',
         function(i) {
           return rand.get(i);
@@ -1039,6 +1039,10 @@ var opts = tav.set({
     note: 'Load data from previous run',
     value: false
   }
+  seed: {
+    note: 'Seed for randomizer',
+    value: 42
+  },
 });
 
 main(opts);
