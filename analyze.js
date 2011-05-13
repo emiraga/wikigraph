@@ -1038,11 +1038,11 @@ var opts = tav.set({
   load: {
     note: 'Load data from previous run',
     value: false
-  }
+  },
   seed: {
     note: 'Seed for randomizer',
     value: 42
-  },
+  }
 });
 
 main(opts);
