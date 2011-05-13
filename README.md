@@ -64,6 +64,13 @@ To do analysis of real wikipedia database, download dumps from [english wikipedi
  - page.sql.gz
  - redirect.sql.gz
 
+Prepare redis server: (1) Client timeout is annoying, disable that (2) Unix sockets are slightly faster. Relevant lines from `redis.conf`
+
+    unixsocket /tmp/redis.sock
+    timeout 0
+
+We rely on copy-on-write mechanism just like redis, that's why `overcommit_memory` should be set for all nodes.
+
 On a single machine first generate graphs. Edit settings in `src/config.h.in` and compile binaries in Release mode (with asserts).
 
     cmake -DCMAKE_BUILD_TYPE=ReleaseAssert src/

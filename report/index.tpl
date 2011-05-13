@@ -151,7 +151,7 @@
       </tbody>
     </table>
 
-    <p>Distance between articles (AL):</p>
+    <!--<p>Distance between articles (AL):</p>-->
 
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,art.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=art.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
     <div class="imglabel">Distance spectrum (AL).</div>
@@ -199,7 +199,7 @@
       </tbody>
     </table>
 
-    <p>Distance between nodes (CL):</p>
+    <!-- <p>Distance between nodes (CL):</p> -->
 
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,cat.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=cat.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
     <div class="imglabel">Distance spectrum (CL).</div>
