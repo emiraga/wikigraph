@@ -1,11 +1,8 @@
-Story
------
-
 Some of you might remember [Six degrees of Wikipedia](http://www.netsoc.tcd.ie/~mu/wiki/) by Stephen Dolan. 
 That was done in 2007 and I though it would be a good idea to see what has changed since then.
 
-I started with a [XML parser](https://github.com/emiraga/wikigraph/blob/f4ee89d28efc93f4b44d7ccea4b036aa3db806f6/xmlparse.py) just like Stephen, 
-but later decided to parse SQL files instead, since they contain all information we need, and admittedly wiki parsing is much more difficult. 
+It started with a [XML parser](https://github.com/emiraga/wikigraph/blob/f4ee89d28efc93f4b44d7ccea4b036aa3db806f6/xmlparse.py) just like Stephen, 
+but later I decided to parse SQL files instead, since they contain all information we need, and admittedly wiki parsing is much more difficult. 
 As far as database goes, I needed one which was in-memory (including VM capabilities), and one that supports more complex data structures such 
 as queues (distributed processing). Needless to say: [redis](http://redis.io/) was database of choice.
 
@@ -53,7 +50,7 @@ Run a redis server on a localhost and default port.
     make
     ./gen_graph
     ./process_graph -f 1 #make one background worker
-    coffee analyze.coffee
+    node analyze.js
 
 Output is written to `report/index.html`
 

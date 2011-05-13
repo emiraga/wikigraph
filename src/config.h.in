@@ -20,11 +20,6 @@
 // can we keep in memory. This is a tradeoff between memory and speed.
 #define NODES_PER_PASS (1000 * 1000)
 
-// Results of a process_graph will remain in database for x seconds
-// This time is used to wait for a controller to pick-up the results
-// and as a primitive caching mechanism.
-#define RESULTS_EXPIRE 300 // Seconds
-
 // How many top nodes to return
 #define PAGERANK_RESULTS 20
 

@@ -237,11 +237,6 @@ int main(int argc, char *argv[]) {
         result = graph_command(job+1, node, &cat_graph, num_nodes, is_parent);
       }
       break;
-      // command
-      case 'P': {  // PING 'Are you still there?'
-        result = "{\"still_alive\":\"This was a triumph.\"}";
-      }
-      break;
 #ifdef DEBUG
       // command
       case '.': {  // Job that does not produce any result
@@ -257,8 +252,8 @@ int main(int argc, char *argv[]) {
       continue;
 
     // Set results
-    reply = redisCmd(c, "SETEX result:%s %d %b",
-        job, RESULTS_EXPIRE, result.c_str(), result.size());
+    reply = redisCmd(c, "SET result:%s %b", job,
+        result.c_str(), result.size());
     freeReplyObject(reply);
     // Announcing must come after settings the results.
 
