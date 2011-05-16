@@ -92,6 +92,15 @@ And finally start controller for the whole process
 
 This will issue jobs, record the results and write a html report.
 
+Bastard linux kernel tends to take memory away from processes. These settings helped me in strugle with memory
+
+    echo 20 > /proc/sys/vm/swappiness
+    echo 200 > /proc/sys/vm/vfs_cache_pressure
+
+Or, you can occasionally, drop the caches
+
+    sync; echo 3 | tee /proc/sys/vm/drop_caches
+
 Assumptions
 -----------
 * At Least 1.5GB of RAM.
