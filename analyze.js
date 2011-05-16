@@ -288,13 +288,13 @@ JobMonitor.prototype._popqueue_block = function() {
 };
 JobMonitor.prototype._job_pop = function(err, result) {
   if (err) throw err;
-  var job = result[1];
+  var job = 'result:' + result[1];
 
   var _this = this;
   var wait = this.waittime_job[job] || this.wait_milisec;
 
   setTimeout(function(){
-    _this.redis.get('result:'+job, function(err,status) {
+    _this.redis.get(job, function(err,status) {
       if (err) throw err;
       if (!status) {
         // Job is lost, push it back into the run-queue
@@ -302,10 +302,12 @@ JobMonitor.prototype._job_pop = function(err, result) {
         console.log('Re-scheduling job ' + job);
       }
     });
-  }, wait);
+  }, wait); // Jobs are supposed to be finished after a number of seconds
 
   if (this.monitor) {
-    this._popqueue_block();  // monitor queue for next job
+    process.nextTick(function() {
+      _this._popqueue_block.apply(_this);  // monitor queue for next job
+    });
   } else {
     //this.onevent.stopped();
   }
