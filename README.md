@@ -64,10 +64,14 @@ To do analysis of real wikipedia database, download dumps from [english wikipedi
  - page.sql.gz
  - redirect.sql.gz
 
-Prepare redis server: (1) Client timeout is annoying, disable that (2) Unix sockets are slightly faster. Relevant lines from `redis.conf`
+Prepare redis server: Client timeout is annoying, disable that. Unix sockets are slightly faster that network. Background writes are annoying as well, append only files (AOF) provide a nice alternative. Relevant lines from `redis.conf`
 
     unixsocket /tmp/redis.sock
     timeout 0
+    appendonly yes
+    #save 900 1 don't save rdb while processing
+    #save 300 10
+    #save 60 1000 just comment saves out
 
 We rely on copy-on-write mechanism just like redis, that's why `overcommit_memory` should be set for all nodes.
 

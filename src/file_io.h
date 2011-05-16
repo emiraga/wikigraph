@@ -29,6 +29,7 @@ class File {
   virtual off_t tell() = 0;
   virtual int seek(off_t offset, int whence) = 0;
   virtual bool eof() = 0;
+  virtual int fdno() = 0;
   // Only useful when reading files
   virtual double get_progress() = 0;
 };
@@ -59,6 +60,9 @@ class SystemFile : public File {
   bool eof() {
     return ::feof(f_);
   }
+  int fdno() {
+    return ::fileno(f_);
+  }
   // Only useful when reading files
   double get_progress() {
     if (!file_size_)
@@ -87,7 +91,7 @@ class GzipFile : public File {
     if (!f_plain_)
       return false;
     // Open az gzip
-    f_ = ::gzdopen(fileno(f_plain_), mode);
+    f_ = ::gzdopen(::fileno(f_plain_), mode);
     return f_ != Z_NULL;
   }
   size_t write(const void *ptr, size_t size, size_t nmemb) {
@@ -109,6 +113,9 @@ class GzipFile : public File {
   }
   bool eof() {
     return ::gzeof(f_);
+  }
+  int fdno() {
+    return ::fileno(f_plain_);
   }
   // Only useful when reading files
   double get_progress() {

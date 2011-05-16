@@ -779,6 +779,9 @@ int main(int argc, char *argv[]) {
   reply = wikigraph::redisCmd(redis, "SELECT %d", REDIS_DATABASE);
   freeReplyObject(reply);
 
+  reply = wikigraph::redisCmd(redis, "INCR s:gen_graph:run");
+  freeReplyObject(reply);
+
   // Add stages
   wikigraph::vector<wikigraph::Stage*> stages;
   stages.push_back(new wikigraph::stage1::Stage1());

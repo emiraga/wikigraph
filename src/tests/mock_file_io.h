@@ -18,6 +18,7 @@ class MockFile : public File {
   MOCK_METHOD2(seek, int(off_t offset, int whence));
   MOCK_METHOD0(eof, bool());
   MOCK_METHOD0(get_progress, double());
+  MOCK_METHOD0(fdno, int());
 };
 
 class MockFileWriter : public FileWriter {
@@ -86,6 +87,9 @@ class StubFile : public File {
   }
   double get_progress() {
     return 100 * pos_ / size_;
+  }
+  int fdno() {
+    return -1;
   }
 };
 

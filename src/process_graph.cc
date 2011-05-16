@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
   CompleteGraphAlgo cat_graph(&f_cat);
-  cat_graph.Init();
+  cat_graph.Init(true);
   f_cat.close();
 
   // Check sanity of graph
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
 
   // Category nodes are invalid
   CompleteGraphAlgo art_graph(&f_art, &is_category);
-  art_graph.Init();
+  art_graph.Init(true);
   f_art.close();
 
   // Check sanity of graph

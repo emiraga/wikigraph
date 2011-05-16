@@ -29,7 +29,7 @@ TEST(CompleteGraphAlgo, BFS_SCC_simple) {
   };
   StubFile fs(data, sizeof(data));
   CompleteGraphAlgo algo(&fs);
-  algo.Init();
+  algo.Init(false);
   vector<uint32_t> res;
   // node 1
   res = algo.GetDistances(1);
@@ -66,7 +66,7 @@ TEST(CompleteGraphAlgo, PageRankSimple) {
   };
   StubFile fs(data, sizeof(data));
   CompleteGraphAlgo algo(&fs);
-  algo.Init();
+  algo.Init(false);
   vector<pair<double, node_t> > res;
 
   res = algo.PageRank(1, false);

@@ -335,13 +335,13 @@ Controller.prototype._RunJob = function(job, callback) {
   this.redis.lpush('queue:jobs', job);
 };
 Controller.prototype.RunJob = function(job, callback) {
-  console.log('Running Job: ' + job);
+  // console.log('Running Job: ' + job);
   // Results are cached, check that first
   var _this = this;
   this.redis.get('result:'+job, function(err, result) {
     if(err) throw err;
     if (result) {
-      console.log('Finished Job (cache): '+job);
+      // console.log('Finished Job (cache): '+job);
       callback(job, JSON.parse(result));
     } else {
       // Result is not in cache, issue a new job
@@ -358,8 +358,8 @@ Controller.prototype.RunJob = function(job, callback) {
 Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) {
   var node = 0;
   // Slow-start
-  var bulksize = 5;
-  var granul = 1;
+  var bulksize = 10;
+  var granul = 10;
   var _this = this;
   
   map = map || function(i) { return i; };
@@ -478,7 +478,7 @@ Controller.prototype.ResolveInfo = function(type, total, cb_get_node, cb_set_inf
 function Mutex(redis) {
   this.redis = redis;
   this.run = false;
-  this.period = 500;  // milisec
+  this.period = 1500;  // milisec
 }
 Mutex.prototype.Start = function(callback) {
   if (this.run)

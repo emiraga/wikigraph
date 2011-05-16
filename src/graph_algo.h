@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/mman.h>
 
 #include <map>
 #include <algorithm>
@@ -33,7 +34,7 @@ class CompleteGraphAlgo {
     graph_.edges = NULL;
   }
 
-  void Init() {
+  void Init(bool mMap) {
     assert(graph_.list == NULL);
     node_t tmp[2];
     // Read from back
@@ -45,13 +46,28 @@ class CompleteGraphAlgo {
     graph_.num_edges = tmp[0];
     graph_.num_nodes = tmp[1];
 
-    // Read edges
-    graph_.edges = new uint32_t[ graph_.num_edges ];
-    file_->read(graph_.edges, sizeof(uint32_t), graph_.num_edges);
+    if(!mMap) {
+        // Read edges
+        graph_.edges = new uint32_t[ graph_.num_edges ];
+        file_->read(graph_.edges, sizeof(uint32_t), graph_.num_edges);
 
-    // Read list of nodes (+2 for index zero and extra element at end.)
-    graph_.list = new uint32_t[ graph_.num_nodes + 2 ];
-    file_->read(graph_.list, sizeof(uint32_t), graph_.num_nodes + 2);
+        // Read list of nodes (+2 for index zero and extra element at end.)
+        graph_.list = new uint32_t[ graph_.num_nodes + 2 ];
+        file_->read(graph_.list, sizeof(uint32_t), graph_.num_nodes + 2);
+    } else {
+        void *edges = ::mmap(NULL,
+            (graph_.num_edges + graph_.num_nodes + 2)*sizeof(uint32_t),
+            PROT_READ, MAP_SHARED, file_->fdno(), 0);
+
+        if (edges == MAP_FAILED) {
+            perror("mmap failed");
+            exit(1);
+        }
+        graph_.edges = reinterpret_cast<node_t*>(edges);
+        // Avoid calling mmap twice, since offset parameter is difficult to
+        // deal with.
+        graph_.list = reinterpret_cast<node_t*>(edges) + graph_.num_edges;
+    }
 
     // For processing
     queue_ = new uint32_t[ graph_.num_nodes + 2];
