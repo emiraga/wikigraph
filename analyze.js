@@ -632,6 +632,7 @@ function main(opts) {
         "s:count:Articles", "s:count:Article_links", 
         "s:count:Categories", "s:count:Category_links",
     function(err, result) {
+      if (err) throw err;
       data.art.num_nodes = data.cat.num_nodes = parseInt(result[0], 10);
 
       data.art.num_articles = parseInt(result[1], 10);
