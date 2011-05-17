@@ -321,18 +321,27 @@ function Controller(redis, redis_pubsub) {
   this.redis = redis;
   this.redis_pubsub = redis_pubsub;
   this.onevent = {};
+  this.explore = false;
 }
 Controller.prototype.on = function(name, cb) {
   this.onevent[name] = cb;
 };
+Controller.prototype.setExplore = function(explore) {
+  this.explore = explore;
+};
 Controller.prototype._RunJob = function(job, callback) {
   // First listen on a channel where results will be announced
   var _this = this;
-  this.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
-    _this.redis_pubsub.unsubscribe(channel);
-    console.log('Finished Job: '+job);
-    callback(job, JSON.parse(msg));
-  });
+  if (!this.explore) {
+    this.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
+      _this.redis_pubsub.unsubscribe(channel);
+      console.log('Finished Job: '+job);
+      callback(job, JSON.parse(msg));
+    });
+  } else {
+    // console.log('Added job: '+job);
+    callback(job, {error:'Running is explore mode'});
+  }
   // Push the job on queue
   this.redis.lpush('queue:jobs', job);
 };
@@ -340,16 +349,28 @@ Controller.prototype.RunJob = function(job, callback) {
   // console.log('Running Job: ' + job);
   // Results are cached, check that first
   var _this = this;
-  this.redis.get('result:'+job, function(err, result) {
-    if(err) throw err;
-    if (result) {
-      // console.log('Finished Job (cache): '+job);
-      callback(job, JSON.parse(result));
-    } else {
-      // Result is not in cache, issue a new job
-      _this._RunJob(job, callback);
-    }
-  });
+  if (!this.explore) {
+    this.redis.get('result:'+job, function(err, result) {
+      if (err) throw err;
+      if (result) {
+        // console.log('Finished Job (cache): '+job);
+        callback(job, JSON.parse(result));
+      } else {
+        // Result is not in cache, issue a new job
+        _this._RunJob(job, callback);
+      }
+    });
+  } else {
+    this.redis.exists('result:'+job, function(err, doesExist) {
+      if (err) throw err;
+      if (doesExist) {
+        callback(job, {error:'Running is explore mode'});
+      } else {
+        // Result is not in cache, issue a new job
+        _this._RunJob(job, callback);
+      }
+    });
+  }
 };
 /**
  * @param num_nodes   desired number of nodes to be processed
@@ -361,7 +382,7 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) 
   var node = 0;
   // Slow-start
   var bulksize = 10;
-  var granul = 10;
+  var granul = 3;
   var _this = this;
   
   map = map || function(i) { return i; };
@@ -370,7 +391,7 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) 
     _this.redis.llen('queue:jobs', function(err, len) {
       if (err) throw err;
       var percent = (100*(node-len)/num_nodes).toFixed(4);
-      console.log(percent+'%  queue:jobs len is '+len+' bulksize '+bulksize);
+      console.log(percent+'%  queue:jobs '+ command +' len is '+len+' bulksize '+bulksize);
       if (len < 3*bulksize || len < 3*granul) {
         if (len < bulksize || len < granul) {
           bulksize += granul;
@@ -699,6 +720,7 @@ function main(opts) {
    */
   var gen_compute_distances = function(type, member_name, sample_size) {
     return function(callback) {
+      console.log("Computing distances for " + member_name);
       var graph_info = data[member_name];
 
       assert.strictEqual(graph_info.nodes_done, 0);
@@ -858,18 +880,34 @@ function main(opts) {
     });
   }
 
+  var proc;
+
   if (opts.load) {
     // Alternative process, previous data is loaded from state file
-    var proc = new Processing(
+    proc = new Processing(
       [load_state],
       [write_report, redis_close]
     );
-    proc.run();
-    return;
+  }
+
+  if (opts.explore) {
+    // just populate the database with results
+    console.log("Entering explore mode");
+
+    control.setExplore(true);
+    proc = new Processing(
+        [init_mutex],
+        [init_monitor],
+        [init_get_counts],
+        [gen_compute_distances('a','art', RANDOM_ARTICLES), gen_compute_distances('c','cat', RANDOM_CATEGORIES)],
+  
+        [redis_close, stop_mutex_monitor],
+        [function(){ process.exit(); }] // deadly!
+    );
   }
 
   // Complete description of report generation process
-  var proc = new Processing(
+  proc = proc || new Processing(
       [init_mutex],
       [init_monitor],
 
@@ -1037,6 +1075,10 @@ var opts = tav.set({
   port: {
     note: 'Redis port',
     value: 6379
+  },
+  explore: {
+    note: 'Populate database with dataset, don\'t retrieve results',
+    value: false
   },
   load: {
     note: 'Load data from previous run',
