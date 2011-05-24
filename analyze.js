@@ -265,12 +265,12 @@ JobMonitor.prototype.Start = function(callback) {
   if (this.monitor) {
     throw new Error("JobMonitor is already running");
   }
-  var _this = this;
+  var self = this;
   this.monitor = true;
   // Empty queues
   this.redis.del('queue:jobs', 'queue:running', function(err) {
     if (err) throw err;
-    _this._popqueue_block();
+    self._popqueue_block();
     callback();
   });
 };
@@ -281,24 +281,24 @@ JobMonitor.prototype.Stop = function() {
   this.monitor = false;
 };
 JobMonitor.prototype._popqueue_block = function() {
-  var _this = this;
+  var self = this;
   this.redis_block.blpop('queue:running', 0, function(){
-    _this._job_pop.apply(_this, arguments);
+    self._job_pop.apply(self, arguments);
   });
 };
 JobMonitor.prototype._job_pop = function(err, result) {
   if (err) throw err;
   var job = 'result:' + result[1];
 
-  var _this = this;
+  var self = this;
   var wait = this.waittime_job[job] || this.wait_milisec;
 
   setTimeout(function(){
-    _this.redis.get(job, function(err,status) {
+    self.redis.get(job, function(err,status) {
       if (err) throw err;
       if (!status) {
         // Job is lost, push it back into the run-queue
-        _this.redis.lpush('queue:jobs',job);
+        self.redis.lpush('queue:jobs',job);
         console.log('Re-scheduling job ' + job);
       }
     });
@@ -306,12 +306,19 @@ JobMonitor.prototype._job_pop = function(err, result) {
 
   if (this.monitor) {
     process.nextTick(function() {
-      _this._popqueue_block.apply(_this);  // monitor queue for next job
+      self._popqueue_block.apply(self);  // monitor queue for next job
     });
   } else {
     //this.onevent.stopped();
   }
 };
+// }}}
+
+// {{{ interface ExtDb
+// Interface for external storage
+// function ExtDb() {}
+// ExtDb.prototype.set(key,val,callback)
+// ExtDb.prototype.get(key,callback)
 // }}}
 
 // {{{ class Controller
@@ -322,6 +329,7 @@ function Controller(redis, redis_pubsub) {
   this.redis_pubsub = redis_pubsub;
   this.onevent = {};
   this.explore = false;
+  this.extdb = null;
 }
 Controller.prototype.on = function(name, cb) {
   this.onevent[name] = cb;
@@ -329,12 +337,15 @@ Controller.prototype.on = function(name, cb) {
 Controller.prototype.setExplore = function(explore) {
   this.explore = explore;
 };
+Controller.prototype.setExtDb = function(db) {
+  this.extdb = db;
+}
 Controller.prototype._RunJob = function(job, callback) {
   // First listen on a channel where results will be announced
-  var _this = this;
+  var self = this;
   if (!this.explore) {
-    this.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
-      _this.redis_pubsub.unsubscribe(channel);
+    self.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
+      self.redis_pubsub.unsubscribe(channel);
       console.log('Finished Job: '+job);
       callback(job, JSON.parse(msg));
     });
@@ -343,12 +354,12 @@ Controller.prototype._RunJob = function(job, callback) {
     callback(job, {error:'Running is explore mode'});
   }
   // Push the job on queue
-  this.redis.lpush('queue:jobs', job);
+  self.redis.lpush('queue:jobs', job);
 };
 Controller.prototype.RunJob = function(job, callback) {
   // console.log('Running Job: ' + job);
   // Results are cached, check that first
-  var _this = this;
+  var self = this;
   if (!this.explore) {
     this.redis.get('result:'+job, function(err, result) {
       if (err) throw err;
@@ -357,7 +368,7 @@ Controller.prototype.RunJob = function(job, callback) {
         callback(job, JSON.parse(result));
       } else {
         // Result is not in cache, issue a new job
-        _this._RunJob(job, callback);
+        self._RunJob(job, callback);
       }
     });
   } else {
@@ -367,7 +378,7 @@ Controller.prototype.RunJob = function(job, callback) {
         callback(job, {error:'Running is explore mode'});
       } else {
         // Result is not in cache, issue a new job
-        _this._RunJob(job, callback);
+        self._RunJob(job, callback);
       }
     });
   }
@@ -383,12 +394,12 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) 
   // Slow-start
   var bulksize = 10;
   var granul = 3;
-  var _this = this;
+  var self = this;
   
   map = map || function(i) { return i; };
 
   var insert_bulk = function() {
-    _this.redis.llen('queue:jobs', function(err, len) {
+    self.redis.llen('queue:jobs', function(err, len) {
       if (err) throw err;
       var percent = (100*(node-len)/num_nodes).toFixed(4);
       console.log(percent+'%  queue:jobs '+ command +' len is '+len+' bulksize '+bulksize);
@@ -398,7 +409,7 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) 
         }
         var endpoint = Math.min(num_nodes, node + bulksize);
         for(var i=node+1; i<= endpoint; i++) {
-          _this.RunJob(command + map(i), callback);
+          self.RunJob(command + map(i), callback);
         }
         node = endpoint;
       }
@@ -463,7 +474,7 @@ Controller.prototype.ResolveInfo = function(type, total, cb_get_node, cb_set_inf
     cb_done();
   }
   var resolved = 0;
-  var _this = this;
+  var self = this;
   // Resolve names of articles given list of nodes
   for (var i = 0; i < total; i++) {
     var node = cb_get_node(i);
@@ -476,7 +487,7 @@ Controller.prototype.ResolveInfo = function(type, total, cb_get_node, cb_set_inf
           result.in_degree = result.out_degree = 0;
         }
 
-        _this.RunJob(type+"D"+_node, function(job, dist) {
+        self.RunJob(type+"D"+_node, function(job, dist) {
 
           if(dist.error) {
             // For categories in article graph, error will be reported
@@ -507,22 +518,22 @@ Mutex.prototype.Start = function(callback) {
   if (this.run)
     throw new Error("Mutex is already running");
 
-  var _this = this;
+  var self = this;
   this.redis.incr('mutex', function(err, cnt1) {
     if (err) throw err;
     // Check if there is another instance running
     setTimeout(function(){
-      _this.redis.incr('mutex', function(err, cnt2) {
+      self.redis.incr('mutex', function(err, cnt2) {
         if (err) throw err;
         if(cnt1 + 1 == cnt2) {
-          _this.run = true;
-          _this._incr();
+          self.run = true;
+          self._incr();
           callback();
         } else {
           throw new Error("Another instance is running");
         }
       });
-    }, _this.period*2);
+    }, self.period*2);
   });
 };
 Mutex.prototype.Stop = function() {
@@ -531,13 +542,13 @@ Mutex.prototype.Stop = function() {
   this.run = false;
 };
 Mutex.prototype._incr = function() {
-  var _this = this;
+  var self = this;
   setTimeout(function(){
-    if(!_this.run) return;
+    if(!self.run) return;
     
-    _this.redis.incr('mutex',function(err, cnt) {
+    self.redis.incr('mutex',function(err, cnt) {
       if (err) throw err;
-      _this._incr();
+      self._incr();
     });
   }, this.period);
 };
@@ -565,9 +576,9 @@ Processing.prototype.run = function(i) {
   if(i >= jobs.length) {
     return;
   }
-  var _this = this;
+  var self = this;
   this._parallel(jobs[i], function() {
-    _this.run(i+1);
+    self.run(i+1);
   });
 }
 Processing.prototype._parallel = function(jobs, callback) {
@@ -646,6 +657,27 @@ function main(opts) {
   var init_monitor = function(callback) {
     monitor.Start(callback);
   };
+  
+  //var init_mysql = function(callback) {
+  //  if(!opts.mysql) return callback();
+
+  //  // opts.mysql = "user:pass@host/database"
+  //  var str2 = opts.mysql.split('@',2);
+  //  var userpass = str2.split(':',2);
+  //  var hostdb = str2.split('/',2);
+
+  //  var mysqlmodule = require("db-mysql");
+
+  //  new mysqlmodule.Database({
+  //    hostname: hostdb[0],
+  //    user: userpass[0],
+  //    password: userpass[1],
+  //    database: hostdb[1]
+  //  }).on('ready', function() {
+  //    control.setExtDb(new MysqlDb(this));
+  //    callback();
+  //  }).connect();
+  //}
 
   // Get counts
   var init_get_counts = function(callback) {
@@ -891,7 +923,9 @@ function main(opts) {
   }
 
   if (opts.explore) {
-    // just populate the database with results
+    // Just populate the database with results,
+    // Does not generete the report, but it schedules a jobs
+    // to be computed.
     console.log("Entering explore mode");
 
     control.setExplore(true);
