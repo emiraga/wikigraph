@@ -298,7 +298,7 @@ JobMonitor.prototype._job_pop = function(err, result) {
       if (err) throw err;
       if (!status) {
         // Job is lost, push it back into the run-queue
-        _this.redis.lpush('queue:jobs',job);
+        _this.redis.lpush('queue:jobs', result[1]);
         console.log('Re-scheduling job ' + job);
       }
     });
