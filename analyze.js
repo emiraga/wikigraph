@@ -291,7 +291,7 @@ JobMonitor.prototype._job_pop = function(err, result) {
   var job = 'result:' + result[1];
 
   var _this = this;
-  var wait = this.waittime_job[job] || this.wait_milisec;
+  var wait = this.waittime_job[result[1]] || this.wait_milisec;
 
   setTimeout(function(){
     _this.redis.get(job, function(err,status) {
@@ -299,7 +299,7 @@ JobMonitor.prototype._job_pop = function(err, result) {
       if (!status) {
         // Job is lost, push it back into the run-queue
         _this.redis.lpush('queue:jobs', result[1]);
-        console.log('Re-scheduling job ' + job);
+        console.log('Re-scheduling job ' + result[1]);
       }
     });
   }, wait); // Jobs are supposed to be finished after a number of seconds
@@ -375,14 +375,14 @@ Controller.prototype.RunJob = function(job, callback) {
 /**
  * @param num_nodes   desired number of nodes to be processed
  * @param command     which command to issue, for example 'aD'
- * @param map         OPTIONAL: callback a generator to provide nodes that need
+ * @param map         OPTIONAL: a generator to provide nodes that need
  *                    processing. (Default: identity function).
  */
 Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) {
   var node = 0;
   // Slow-start
-  var bulksize = 10;
-  var granul = 3;
+  var bulksize = 20;
+  var granul = 20;
   var _this = this;
   
   map = map || function(i) { return i; };
@@ -394,7 +394,9 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) 
       console.log(percent+'%  queue:jobs '+ command +' len is '+len+' bulksize '+bulksize);
       if (len < 3*bulksize || len < 3*granul) {
         if (len < bulksize || len < granul) {
-          bulksize += granul;
+          if (bulksize < 10000) {
+            bulksize += granul;
+          }
         }
         var endpoint = Math.min(num_nodes, node + bulksize);
         for(var i=node+1; i<= endpoint; i++) {
