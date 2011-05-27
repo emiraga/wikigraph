@@ -148,6 +148,7 @@ function GraphInfo(type) {
   this.num_links = 0;
   this.largest_scc = 0;  // cut-off point for closeness calculation
   this.nodes_done = 0;
+  this.nodes_done_proper = 0; // without error
   this.sample_size = 0;
   this.reachable_sum = 0;
   this.distance_sum = 0;
@@ -155,6 +156,7 @@ function GraphInfo(type) {
   this.onevent = {all_done:function(){}};
   this.keep_closest = KEEP_CLOSEST;
   this.dist_spectrum = [];
+  this.num_canreachscc = 0;
 }
 GraphInfo.prototype.on = function(name, cb) {
   this.onevent[name] = cb;
@@ -222,6 +224,7 @@ GraphInfo.prototype.AddNodeDist = function(node, count_dist) {
   // Accumulate values
   var obj = this.CalcAvgDistReachable(count_dist);
   this.nodes_done += 1;
+  this.nodes_done_proper += 1;
   this.distance_sum += obj.distances;
   this.reachable_sum += obj.reachable;
 
@@ -232,6 +235,7 @@ GraphInfo.prototype.AddNodeDist = function(node, count_dist) {
     if(this.closest.size() > this.keep_closest) {
       this.closest.remove();
     }
+    this.num_canreachscc += 1;
   }
 
   if(!this.sample_size) {
