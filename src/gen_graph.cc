@@ -182,6 +182,10 @@ class Stage1 : public Stage {
         "SET s:count:Graph_nodes %d", g_info.graph_nodes_count);
     freeReplyObject(reply);
 
+    reply = redisCmd(redis, "SET s:special:HiddenGraphId %d", 
+        g_name2graphId["c:Hidden_categories"]);
+    freeReplyObject(reply);
+
     PageHandlerNames data_handler(redis);
     data_handler.init();
 
@@ -402,7 +406,7 @@ void RedirectHandler::data(const vector<string> &data) {
     // Target is valid page (or resolved redirect)
     int graphId = g_name2graphId[title];
     if (graphId < 1) {
-      fprintf(stderr, "Inconsitency: Page not found %s\n", title.c_str());
+      fprintf(stderr, "Inconsistency: Page not found %s\n", title.c_str());
       return;  // Nothing scary, mysqldump take time to perform,
       // leaving dumps at potentially inconsistent state
     }
