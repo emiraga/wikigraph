@@ -148,6 +148,7 @@ function GraphInfo(type) {
   this.num_links = 0;
   this.largest_scc = 0;  // cut-off point for closeness calculation
   this.nodes_done = 0;
+  this.nodes_done_proper = 0; // without error
   this.sample_size = 0;
   this.reachable_sum = 0;
   this.distance_sum = 0;
@@ -155,6 +156,7 @@ function GraphInfo(type) {
   this.onevent = {all_done:function(){}};
   this.keep_closest = KEEP_CLOSEST;
   this.dist_spectrum = [];
+  this.num_canreachscc = 0;
 }
 GraphInfo.prototype.on = function(name, cb) {
   this.onevent[name] = cb;
@@ -222,6 +224,7 @@ GraphInfo.prototype.AddNodeDist = function(node, count_dist) {
   // Accumulate values
   var obj = this.CalcAvgDistReachable(count_dist);
   this.nodes_done += 1;
+  this.nodes_done_proper += 1;
   this.distance_sum += obj.distances;
   this.reachable_sum += obj.reachable;
 
@@ -232,6 +235,7 @@ GraphInfo.prototype.AddNodeDist = function(node, count_dist) {
     if(this.closest.size() > this.keep_closest) {
       this.closest.remove();
     }
+    this.num_canreachscc += 1;
   }
 
   if(!this.sample_size) {
@@ -318,6 +322,13 @@ JobMonitor.prototype._job_pop = function(err, result) {
 };
 // }}}
 
+// {{{ interface ExtDb
+// Interface for external storage
+// function ExtDb() {}
+// ExtDb.prototype.set(key,val,callback)
+// ExtDb.prototype.get(key,callback)
+// }}}
+
 // {{{ class Controller
 // Controller just adds new jobs to the queue,
 // and calls the callback on completion. 
@@ -326,6 +337,7 @@ function Controller(redis, redis_pubsub) {
   this.redis_pubsub = redis_pubsub;
   this.onevent = {};
   this.explore = false;
+  this.extdb = null;
 }
 Controller.prototype.on = function(name, cb) {
   this.onevent[name] = cb;
@@ -333,11 +345,14 @@ Controller.prototype.on = function(name, cb) {
 Controller.prototype.setExplore = function(explore) {
   this.explore = explore;
 };
+Controller.prototype.setExtDb = function(db) {
+  this.extdb = db;
+}
 Controller.prototype._RunJob = function(job, callback) {
   // First listen on a channel where results will be announced
   var self = this;
   if (!this.explore) {
-    this.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
+    self.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
       self.redis_pubsub.unsubscribe(channel);
       console.log('Finished Job: '+job);
       callback(job, JSON.parse(msg));
@@ -347,7 +362,7 @@ Controller.prototype._RunJob = function(job, callback) {
     callback(job, {error:'Running is explore mode'});
   }
   // Push the job on queue
-  this.redis.lpush('queue:jobs', job);
+  self.redis.lpush('queue:jobs', job);
 };
 Controller.prototype.RunJob = function(job, callback) {
   // console.log('Running Job: ' + job);
@@ -719,6 +734,27 @@ function main(opts) {
   var init_monitor = function(callback) {
     monitor.Start(callback);
   };
+  
+  //var init_mysql = function(callback) {
+  //  if(!opts.mysql) return callback();
+
+  //  // opts.mysql = "user:pass@host/database"
+  //  var str2 = opts.mysql.split('@',2);
+  //  var userpass = str2.split(':',2);
+  //  var hostdb = str2.split('/',2);
+
+  //  var mysqlmodule = require("db-mysql");
+
+  //  new mysqlmodule.Database({
+  //    hostname: hostdb[0],
+  //    user: userpass[0],
+  //    password: userpass[1],
+  //    database: hostdb[1]
+  //  }).on('ready', function() {
+  //    control.setExtDb(new MysqlDb(this));
+  //    callback();
+  //  }).connect();
+  //}
 
   // Get counts
   var init_get_counts = function(callback) {
@@ -998,7 +1034,9 @@ function main(opts) {
   }
 
   if (opts.explore) {
-    // just populate the database with results
+    // Just populate the database with results,
+    // Does not generete the report, but it schedules a jobs
+    // to be computed.
     console.log("Entering explore mode");
 
     control.setExplore(true);

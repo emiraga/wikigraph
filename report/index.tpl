@@ -8,8 +8,16 @@
   <style type="text/css">
     body { margin-top: 1.0em; background-color: #c7dbfe;
       font-family: "Helvetica,Arial,FreeSans"; color: #000000; }
-    #container { margin: 0 auto; width: 700px; }
-    h1.title { font-size: 2.8em; color: #b87441; margin-bottom: 3px; }
+    #container {
+      margin: 0 auto;
+      width: 700px;
+      background-color: #fff;
+      padding: 20px;
+      -webkit-border-radius: 10px;
+      -moz-border-radius: 10px;
+      border-radius: 10px;
+    }
+    h1.title { font-size: 2.8em; color: #b87441; margin-bottom: 3px; margin-top: 3px; }
     h1 .small { font-size: 0.4em; }
     h1 a { text-decoration: none; }
     h2 { font-size: 1.5em; /*color: #b87441;*/ }
@@ -45,6 +53,9 @@
     .imglabel { text-align: center; font-size: 14px; }
     img.figure { border: 1px solid black; }
     .note { /*background-color: white;*/ border: 1px solid gray; }
+    .oseven { color: #666; }
+    .num { text-align: right; }
+    .scrollbox { overflow:auto; overflow-y:scroll; overflow-x:hidden; border: 1px solid black; }
   </style>
   <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
 </head>
@@ -81,30 +92,29 @@
 
     <table border="0" width="400px">
     <tbody>
-      <tr><th>Year<th>2007<th>2011</tr>
-      <tr><th>Articles<td>2301486<td><%=art.num_articles%></tr>
-      <tr><th>Article links (AL)<td>55550003<td><%=art.num_links%></tr>
-      <tr><th>Categories<td><td><%=cat.num_categories%></tr>
-      <tr><th>Category links (CL)<td><td><%=cat.num_links%></tr>
-      <tr><th><abbr title="Articles+Categories">All nodes</abbr><td><td><%=art.num_nodes%></tr>
+      <tr><th>Year<th class="oseven"><a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
+      <tr><th>Articles<td class="oseven num">2301486<td class="num"><%=art.num_articles%></tr>
+      <tr><th>Article links (AL)<td class="oseven num">55550003<td class="num"><%=art.num_links%></tr>
+      <tr><th>Categories<td><td class="num"><%=cat.num_categories%></tr>
+      <tr><th>Category links (CL)<td><td class="num"><%=cat.num_links%></tr>
+      <tr><th><abbr title="Articles+Categories">All nodes</abbr><td><td class="num"><%=art.num_nodes%></tr>
     </tbody>
     </table>
 
-    <!--
     <p>
-      Data from 2007 was reported by <a href="http://www.netsoc.tcd.ie/~mu/wiki/">Stephen Dolan</a>, I have no idea if it's correct.
-      Ratio of links versus articles does seem to be increased drastically over last 4 years.
-    </p>
-    -->
-
-    <p>
-      For instance, article "Penny Can" has 3 outgoing <b>article links</b> (AL) and 2 <b>category links</b> (CL). Former are directed whereas latter are undirected.
-      Each <b>article</b> or <b>category</b> is one <b>node</b> in a graph.
+      To give an example, this non-existing article "Penny Can" (shown below) has 3 outgoing <b>article links</b> (AL) and 2 <b>category links</b> (CL).
+      Former are directed whereas latter are undirected, individually they create two different graphs.
+      Each <b>article</b> and <b>category</b> is represented as one <b>node</b> in graphs.
     </p>
     <img class="figure" src="http://i.imgur.com/iCJx9.png" />
     <div class="imglabel">Sample node with 3 AL and 2 CL.</div>
 
     <h2>Article PageRank</h2>
+
+    <p>
+      <a href="http://en.wikipedia.org/wiki/PageRank">PageRank</a> is probability that surfer of will be located at a particular article, following ALs randomly.
+      For technical reasons, links from one article to another are counted just once.
+    </p>
 
     <table width="100%" border="0">
       <tbody>
@@ -116,24 +126,22 @@
         <% } %>
       </tbody>
     </table>
-    <p>
-      <a href="http://en.wikipedia.org/wiki/PageRank">PageRank</a> is probability that surfer of will be located at a particular article, following ALs randomly.
-      For technical reasons, links from one article to another are counted just once (no duplicates).
-    </p>
 
     <h2>Strongly connected components</h2>
 
-    <table border="0" width="300px">
-      <tbody>
+    <table border="0" width="100%">
         <tr><th>Component size</th><th>How many?</th></tr>
-        <% for ( var i = 0; i != art.scc.length; i++ ) { %>
-          <tr>
-            <td> <%=art.scc[i][0]%> articles</td>
-            <td> <%=art.scc[i][1]%></td>
-          </tr>
-        <% } %>
-      </tbody>
     </table>
+    <div class="scrollbox" style="height:150px;">
+      <table border="0" width="100%">
+          <% for(var i=art.scc.length-1; i != -1; i--) { %>
+            <tr>
+              <td> <%=art.scc[i][0]%> articles</td>
+              <td> <%=art.scc[i][1]%></td>
+            </tr>
+          <% } %>
+      </table>
+    </div>
     
     <p>
       Compared to reports from <a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
@@ -146,14 +154,17 @@
     <% } %>
     <table border="0" width="400px">
       <tbody>
-        <tr><th>Average reachable articles<td><%= (art.reachable_sum / art.nodes_done ).toFixed(2) %></th></tr>
-        <tr><th>Average distance (clicks)<td><%= (art.distance_sum / art.reachable_sum ).toFixed(2) %></th></tr>
+        <tr><th><th class="oseven"><a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
+        <tr><th>Average min-distance (clicks)<td class="oseven num">4.573<td class="num"><%= (art.distance_sum / art.reachable_sum ).toFixed(3) %></th></tr>
       </tbody>
     </table>
+    <p>
+      This value of average distance is misleading, there are lots of articles that don&#39;t reach majority of articles, such articles contribute to lower average distance. Proper way to do this would be to take into consideration only those articles that can reach largest SCC component. There are <%=art.num_articles %> articles, but on average only <%= (art.reachable_sum / art.nodes_done ).toFixed(1) %> are reachable.
+    </p>
 
     <!--<p>Distance between articles (AL):</p>-->
-
-    <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,art.dist_spectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=art.dist_spectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
+    <% var distspectrum = art.dist_spectrum.slice(0,20); %>
+    <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,distspectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=distspectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
     <div class="imglabel">Distance spectrum (AL).</div>
 
 
@@ -162,7 +173,7 @@
     <table width="100%" border="0">
       <tbody>
         <tr>
-          <th>Nodes<th>Average distace
+          <th>Nodes<th>Average distance
         </tr>
         <% for ( var i = 0; i != art.close_centr.length; i++ ) { var info = art.close_centr[i]; %>
           <tr rel="node<%=info.node%>" >
@@ -194,8 +205,8 @@
     <% } %>
     <table border="0" width="400px">
       <tbody>
+        <tr><th>Average min-distance<td><%= (cat.distance_sum / cat.reachable_sum ).toFixed(2) %></th></tr>
         <tr><th>Average reachable nodes<td><%= (cat.reachable_sum / cat.nodes_done ).toFixed(2) %></th></tr>
-        <tr><th>Average distance<td><%= (cat.distance_sum / cat.reachable_sum ).toFixed(2) %></th></tr>
       </tbody>
     </table>
 
