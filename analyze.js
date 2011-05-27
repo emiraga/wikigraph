@@ -198,6 +198,10 @@ GraphInfo.prototype.CalcAvgDistReachable = function(count_dist) {
 GraphInfo.prototype.AddInvalidNode = function(node, count_dist) {
   // When there is an error with node, we still need to increment this counter
   this.nodes_done += 1;
+
+  if (this.nodes_done == this.sample_size) {
+    this.onevent['all_done']();  // Call an event
+  };
 };
 GraphInfo.prototype.AddNodeDist = function(node, count_dist) {
 
@@ -291,15 +295,15 @@ JobMonitor.prototype._job_pop = function(err, result) {
   var job = 'result:' + result[1];
 
   var self = this;
-  var wait = this.waittime_job[job] || this.wait_milisec;
+  var wait = this.waittime_job[result[1]] || this.wait_milisec;
 
   setTimeout(function(){
     self.redis.get(job, function(err,status) {
       if (err) throw err;
       if (!status) {
         // Job is lost, push it back into the run-queue
-        self.redis.lpush('queue:jobs',job);
-        console.log('Re-scheduling job ' + job);
+        self.redis.lpush('queue:jobs', result[1]);
+        console.log('Re-scheduling job ' + result[1]);
       }
     });
   }, wait); // Jobs are supposed to be finished after a number of seconds
@@ -386,14 +390,14 @@ Controller.prototype.RunJob = function(job, callback) {
 /**
  * @param num_nodes   desired number of nodes to be processed
  * @param command     which command to issue, for example 'aD'
- * @param map         OPTIONAL: callback a generator to provide nodes that need
+ * @param map         OPTIONAL: a generator to provide nodes that need
  *                    processing. (Default: identity function).
  */
 Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) {
   var node = 0;
   // Slow-start
-  var bulksize = 10;
-  var granul = 3;
+  var bulksize = 50;
+  var granul = 50;
   var self = this;
   
   map = map || function(i) { return i; };
@@ -630,10 +634,79 @@ GroupPermutation.prototype.get = function(i) {
     }
   }
 })();
+// }}}
 
-function d() {
-  console.log(arguments);
+// {{{ class BufferedReader
+function BufferedReader(file) {
+    this._fd = fs.openSync(file, 'r');
+    this._buffer = '';
+    this._off = 0;
+    this.RSIZE = 16*1024*1024;
+    this._file_size = fs.statSync(file).size;
+    this._file_read = 0;
 }
+BufferedReader.prototype._readMore = function (howmuch) {
+    var bufnsize = fs.readSync(this._fd, Math.max(howmuch, this.RSIZE), undefined, 'binary');
+    this._buffer += bufnsize[0];
+    this._file_read += bufnsize[1];
+    console.log((this._file_read/this._file_size*100).toFixed(2)+'%');
+}
+BufferedReader.prototype.peek = function (size) {
+    var diff = size - this._buffer.length + this._off;
+    if (diff > 0) {
+        this._readMore(diff);
+    }
+    return this._buffer.substr(this._off, size);
+}
+BufferedReader.prototype.read = function (size) {
+    var ret = this.peek(size);
+    this._off += size;
+    if (this._off > this.RSIZE) {
+        // Remove old data from buffer
+        this._buffer = this._buffer.substr(this._off);
+        this._off = 0;
+    }
+    return ret;
+}
+BufferedReader.prototype.eof = function() {
+    return this.peek(1).length === 0;
+}
+// }}}
+
+// {{{ class AofReader
+function AofReader(reader) {
+    this._r = reader;
+    this._on = {}
+}
+AofReader.prototype.on = function (cmd, cb) {
+    this._on[cmd] = cb;
+}
+AofReader.prototype._readnum = function(chr) {
+    var str1 = this._r.peek(15); // For example: $4\r\n
+    assert.strictEqual(chr, str1[0]);
+    this._r.read(str1.indexOf("\n")+1); // Skip after newline
+    return parseInt(str1.substr(1), 10);
+}
+AofReader.prototype.readSync = function() {
+    var r = this._r;
+    var on = this._on;
+    while(!r.eof()) {
+        var numargs = this._readnum('*');
+        var args = []
+        for(var i=0;i<numargs;i++) {
+            var len = this._readnum('$');
+            args[i] = r.read(len);
+            
+            var rn = r.read(2);
+            if("\r\n" != rn) {
+              console.dir(rn+r.read(100));
+              assert.strictEqual("\r\n", r.read(2));
+            }
+        }
+        on[args[0]] && on[args[0]].apply(null, args);
+    }
+}
+// }}}
 
 function main(opts) {
   
@@ -752,19 +825,13 @@ function main(opts) {
    */
   var gen_compute_distances = function(type, member_name, sample_size) {
     return function(callback) {
-      console.log("Computing distances for " + member_name);
       var graph_info = data[member_name];
-
       assert.strictEqual(graph_info.nodes_done, 0);
-      graph_info.on('all_done', callback);  // Articles
-
-      if(!sample_size || sample_size >= graph_info.num_nodes) {
-        // Process every node
+      graph_info.on('all_done', callback);
+      if(!sample_size || sample_size >= graph_info.num_nodes)
         sample_size = graph_info.num_nodes;
-      }
-
-      // Randomly select sample_size from a list
       graph_info.sample_size = sample_size;
+
       var rand = new GroupPermutation(graph_info.num_nodes, opts.seed);
       control.JobsForNodes(sample_size, type+'D',
         function(i) {
@@ -785,6 +852,46 @@ function main(opts) {
       );
     };
   };
+
+  if (opts.aof) {
+    // Instead of loading results from redis server, 
+    // stream/read them from AOF file.
+    gen_compute_distances = function(type, member_name, sample_size) {
+      return function(callback) {
+        var aof = new AofReader(new BufferedReader(opts.aof));
+        var graph_info = data[member_name];
+        assert.strictEqual(graph_info.nodes_done, 0);
+        graph_info.on('all_done', callback);
+        if(!sample_size || sample_size >= graph_info.num_nodes)
+          sample_size = graph_info.num_nodes;
+        graph_info.sample_size = sample_size;
+
+        var loaded = {};
+        var signature = 'result:'+type+'D';
+        aof.on('SET', function(cmd, key, value) {
+          if(key.substr(0,signature.length) == signature) {
+            var node = parseInt(key.substr(signature.length), 10);
+            if (loaded[node]) return;
+            loaded[node] = true; // Remove potential duplicates
+            var result = JSON.parse(value);
+            if (result.error) {
+              graph_info.AddInvalidNode(node, result.error);
+            } else {
+              assert.strictEqual(result.count_dist[0], 1);
+              graph_info.AddNodeDist(node, result.count_dist);
+            }
+          }
+        });
+
+        aof.readSync();
+
+        if(graph_info.sample_size != graph_info.nodes_done) {
+          console.log(graph_info.sample_size, graph_info.nodes_done);
+          console.log('It seems that AOF file is missing some data, run this script with --explore first.');
+        }
+      }
+    };
+  }
 
   var gen_centr_articles = function(type, member_name) {
     return function(callback) {
@@ -1121,6 +1228,10 @@ var opts = tav.set({
   seed: {
     note: 'Seed for randomizer',
     value: 42
+  },
+  aof: {
+    node: 'Load results from redis AOF file',
+    value: false
   }
 });
 
