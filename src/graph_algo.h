@@ -46,7 +46,7 @@ class CompleteGraphAlgo {
     graph_.num_edges = tmp[0];
     graph_.num_nodes = tmp[1];
 
-    if(!mMap) {
+    if (!mMap) {
         // Read edges
         graph_.edges = new uint32_t[ graph_.num_edges ];
         file_->read(graph_.edges, sizeof(uint32_t), graph_.num_edges);

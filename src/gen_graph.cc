@@ -613,7 +613,7 @@ class Stage4 : public Stage {
     const char *fname = DUMPFILES"categorylinks.sql";
     const char *gzname = DUMPFILES"categorylinks.sql.gz";
 
-    for(int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
       // Open categorylinks.sql
       SystemFile file;
       if (file.open(fname, "rb")) {
@@ -675,7 +675,8 @@ void CategoryLinksHandler::data(const vector<string> &data) {
 #endif
     if (exploreHidden_) {
       // Just mark all neighbours of hidden node
-      if (from_graphId == g_info.hidden_graphid || to_graphId == g_info.hidden_graphid) {
+      if (from_graphId == g_info.hidden_graphid
+          || to_graphId == g_info.hidden_graphid) {
         g_nodeIsHidden[from_graphId] = true;
         g_nodeIsHidden[to_graphId] = true;
       }

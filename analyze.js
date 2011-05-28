@@ -1044,7 +1044,8 @@ function main(opts) {
         [init_mutex],
         [init_monitor],
         [init_get_counts],
-        [gen_compute_distances('a','art', RANDOM_ARTICLES), gen_compute_distances('c','cat', RANDOM_CATEGORIES)],
+        [gen_compute_distances('a','art', RANDOM_ARTICLES)],
+        [gen_compute_distances('c','cat', RANDOM_CATEGORIES)],
   
         [redis_close, stop_mutex_monitor],
         [function(){ process.exit(); }] // deadly!
