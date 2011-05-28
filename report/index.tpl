@@ -127,7 +127,7 @@
       </tbody>
     </table>
 
-    <h2>Strongly connected components</h2>
+    <h2>Strongly connected components (AL)</h2>
 
     <table border="0" width="100%">
         <tr><th>Component size</th><th>How many?</th></tr>
@@ -156,13 +156,10 @@
       <tbody>
         <tr><th><th class="oseven"><a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
         <tr><th>Average min-distance (clicks)<td class="oseven num">4.573<td class="num"><%= (art.distance_sum / art.reachable_sum ).toFixed(3) %></th></tr>
+        <tr><th>Average reachable articles<td><td class="num"><%= (art.reachable_sum / art.nodes_done_proper ).toFixed(1) %></th></tr>
       </tbody>
     </table>
-    <p>
-      This value of average distance is misleading, there are lots of articles that don&#39;t reach majority of articles, such articles contribute to lower average distance. Proper way to do this would be to take into consideration only those articles that can reach largest SCC component. There are <%=art.num_articles %> articles, but on average only <%= (art.reachable_sum / art.nodes_done ).toFixed(1) %> are reachable.
-    </p>
 
-    <!--<p>Distance between articles (AL):</p>-->
     <% var distspectrum = art.dist_spectrum.slice(0,20); %>
     <img class="figure" src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=Math.max.apply(null,distspectrum)+1%>&chxt=x&chbh=a&chs=696x140&cht=bvs&chd=t:<%=distspectrum.join(",")%>&chm=D,4D89F9,0,0,2,1" />
     <div class="imglabel">Distance spectrum (AL).</div>
@@ -171,32 +168,35 @@
     <h2>Closeness centrality (AL)</h2>
 
     <table width="100%" border="0">
-      <tbody>
         <tr>
           <th>Nodes<th>Average distance
         </tr>
+    </table>
+    <div class="scrollbox" style="height:300px;">
+      <table width="100%" border="0">
         <% for ( var i = 0; i != art.close_centr.length; i++ ) { var info = art.close_centr[i]; %>
           <tr rel="node<%=info.node%>" >
             <td><a href="<%=enwiki+art.close_centr[i].name%>"><%=art.close_centr[i].name%></a><td> (<%=art.close_centr[i].avg_dist.toFixed(3)%>)
           </tr>
         <% } %>
-      </tbody>
-    </table>
-
-    <hr />
+      </table>
+    </div>
 
     <h1>Category links</h1>
 
     <p>
-      Category links (CL) are essentially different from AL. Link is formed when one node (article/category) is declared to be in a category (see example at the top of the page). CL are undirected, i.e. node belongs to another category and category has nodes in it.
+      Link is formed when one node (article/category) is declared to be in a category (see example at the top of the page).
+      CLs are undirected, i.e. node belongs to another category and category has nodes in it.
     </p>
-    <p>
-      An example of CL path:
-      <a href="http://en.wikipedia.org/wiki/Prague">Prague</a> &#8658;
-      <a href="http://en.wikipedia.org/wiki/Category:Cities_and_towns_in_the_Czech_Republic">Category:Cities_and_towns_in_the_Czech_Republic</a> &#8658;
-      <a href="http://en.wikipedia.org/wiki/Category:Karlovy_Vary">Category:Karlovy_Vary</a> &#8658;
+    <!--
+    <blockquote>
+      An example of CL path:<br/>
+      <a href="http://en.wikipedia.org/wiki/Prague">Prague</a> &#8658;<br/>
+      <a href="http://en.wikipedia.org/wiki/Category:Cities_and_towns_in_the_Czech_Republic">Category:Cities_and_towns_in_the_Czech_Republic</a> &#8658;<br/>
+      <a href="http://en.wikipedia.org/wiki/Category:Karlovy_Vary">Category:Karlovy_Vary</a> &#8658;<br/>
       <a href="http://en.wikipedia.org/wiki/Grandhotel_Pupp">Grandhotel_Pupp</a>
-    </p>
+    </blockquote>
+    -->
 
     <h2>Minimum distance (CL)</h2>
  
@@ -205,8 +205,8 @@
     <% } %>
     <table border="0" width="400px">
       <tbody>
-        <tr><th>Average min-distance<td><%= (cat.distance_sum / cat.reachable_sum ).toFixed(2) %></th></tr>
-        <tr><th>Average reachable nodes<td><%= (cat.reachable_sum / cat.nodes_done ).toFixed(2) %></th></tr>
+        <tr><th>Average min-distance<td><%= (cat.distance_sum / cat.reachable_sum ).toFixed(3) %></th></tr>
+        <tr><th>Average reachable nodes<td><%= (cat.reachable_sum / cat.nodes_done ).toFixed(1) %></th></tr>
       </tbody>
     </table>
 
@@ -217,17 +217,40 @@
 
     <h2>Closeness centrality (CL)</h2>
     <table width="100%" border="0">
-      <tbody>
-        <tr>
-          <th>Nodes<th>Average distace
-        </tr>
+      <tr>
+        <th>Nodes<th>Average distance
+      </tr>
+    </table>
+    <div class="scrollbox" style="height:300px;">
+      <table width="100%" border="0">
         <% for ( var i = 0; i != cat.close_centr.length; i++ ) { var info = cat.close_centr[i]; %>
           <tr rel="node<%=info.node%>" >
             <td><a href="<%=enwiki+cat.close_centr[i].name%>"><%=cat.close_centr[i].name%></a><td> (<%=cat.close_centr[i].avg_dist.toFixed(3)%>)
           </tr>
         <% } %>
-      </tbody>
+      </table>
+    </div>
+
+    <h2>Connected components (CL)</h2>
+
+    <table border="0" width="100%">
+        <tr><th>Component size</th><th>How many?</th></tr>
     </table>
+    <div class="scrollbox" style="height:150px;">
+      <table border="0" width="100%">
+          <% for(var i=cat.scc.length-1; i != -1; i--) { %>
+            <tr>
+              <td> <%=cat.scc[i][0]%> nodes</td>
+              <td> <%=cat.scc[i][1]%></td>
+            </tr>
+          <% } %>
+      </table>
+    </div>
+
+    <p>
+      These results are a bit distorted, since <a href="http://en.wikipedia.org/wiki/Category:Hidden_categories">hidden categories</a>
+      are considered as nodes with no connections to other nodes (Component size = 1).
+    </p>
 
     <!--
     <h2>Interactive</h2>
@@ -237,7 +260,6 @@
       <a href="http://en.wikipedia.org/wiki/Wikipedia:Six_degrees_of_Wikipedia#External_links">other tools</a> available for computing minimum distance.
     </p>
     -->
-    <hr />
 
     <h1>Conclusion</h1>
 
@@ -276,7 +298,8 @@
         <h3><%=info.name%></h3>
         <div class="left">
           <p><b>Articles</b> at a particular distance:</p>
-          <img src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=info.art.max_dist%>&chxt=x,y&chxr=1,0,<%=info.art.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.art.count_dist.join(",")%>" />
+          <% var count_dist = info.art.count_dist.slice(0,10); %>
+          <img src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=info.art.max_dist%>&chxt=x,y&chxr=1,0,<%=info.art.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=count_dist.join(",")%>" />
           <p>Incoming article links: <%=info.art.in_degree%></p>
           <p>Outgoing article links: <%=info.art.out_degree%></p>
           <p>Rachable articles: <%=info.art.stat.reachable%></p>
@@ -285,7 +308,8 @@
         <div class="right">
           <p><b>Category links</b></p>
           <p>Nodes at a particular distance:</p>
-          <img src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=info.cat.max_dist%>&chxt=x,y&chxr=1,0,<%=info.cat.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=info.cat.count_dist.join(",")%>" />
+          <% var count_dist = info.cat.count_dist.slice(0,10); %>
+          <img src="http://chart.apis.google.com/chart?chco=76A4FB&chds=0,<%=info.cat.max_dist%>&chxt=x,y&chxr=1,0,<%=info.cat.max_dist%>&chbh=a&chs=215x100&cht=bvs&chd=t:<%=count_dist.join(",")%>" />
           <p>Category links: <%=info.cat.in_degree%></p>
           <p>Rachable nodes: <%=info.cat.stat.reachable%></p>
           <p>Average distance: <%=(info.cat.stat.closeness).toFixed(4)%></p>
