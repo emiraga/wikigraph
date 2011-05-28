@@ -48,9 +48,11 @@ struct WikiGraphInfo {
   int article_links_count;
   int skipped_catlinks, skipped_fromcat_links;
   int category_links_count;
+  int hidden_graphid;
 } g_info;
 
 bool g_nodeIsCat[MAX_NODEID];
+bool g_nodeIsHidden[MAX_NODEID];  // Belongs to category Hidden_categories
 
 struct FVNHash {
   size_t operator()(const string& str) const {
@@ -162,6 +164,8 @@ class Stage1 : public Stage {
       }
       gzfile.close();
     }
+    g_info.hidden_graphid = g_name2graphId["c:Hidden_categories"];
+    printf("Hidden graphid %d\n", g_info.hidden_graphid);
   }
 
   void finish(redisContext *redis) {
@@ -181,9 +185,8 @@ class Stage1 : public Stage {
     reply = redisCmd(redis,
         "SET s:count:Graph_nodes %d", g_info.graph_nodes_count);
     freeReplyObject(reply);
-
-    reply = redisCmd(redis, "SET s:special:HiddenGraphId %d", 
-        g_name2graphId["c:Hidden_categories"]);
+    reply = redisCmd(redis,
+        "SET s:special:HiddenGraphId %d", g_info.hidden_graphid);
     freeReplyObject(reply);
 
     PageHandlerNames data_handler(redis);
@@ -575,9 +578,10 @@ class CategoryLinksHandler : public DataHandler {
   GraphWriter *graph_;
   BufferedWriter *buff_writer_;
   SystemFile file_;
+  bool exploreHidden_;
  public:
   explicit CategoryLinksHandler(redisContext *redis)
-  :redis_(redis) { }
+  :redis_(redis), exploreHidden_(false) { }
   void init() {
     file_.open("tmp_catlinks_fw.graph", "wb");
     buff_writer_ = new BufferedWriter(&file_);
@@ -587,6 +591,9 @@ class CategoryLinksHandler : public DataHandler {
     delete graph_;
     delete buff_writer_;
     file_.close();
+  }
+  void setExploreHidden(bool val) {
+    exploreHidden_ = val;
   }
   void data(const vector<string> &data);
  private:
@@ -599,29 +606,36 @@ class Stage4 : public Stage {
     g_info.category_links_count = 0;
     CategoryLinksHandler data_handler(redis);
     data_handler.init();
+    // In first pass we collect nodes that belong to hidden category
+    data_handler.setExploreHidden(true);
+    g_nodeIsHidden[g_info.hidden_graphid] = true;
 
     const char *fname = DUMPFILES"categorylinks.sql";
     const char *gzname = DUMPFILES"categorylinks.sql.gz";
 
-    // Open categorylinks.sql
-    SystemFile file;
-    if (file.open(fname, "rb")) {
-      BufferedReader<char> reader(&file);
-      reader.set_print_progress(true);
-      SqlParser parser(&reader, &data_handler);
-      parser.run();
-      file.close();
-    } else {
-      GzipFile gzfile;
-      if (gzfile.open(gzname, "rb")) {
-        BufferedReader<char> reader(&gzfile);
+    for(int i = 0; i < 2; i++) {
+      // Open categorylinks.sql
+      SystemFile file;
+      if (file.open(fname, "rb")) {
+        BufferedReader<char> reader(&file);
         reader.set_print_progress(true);
         SqlParser parser(&reader, &data_handler);
         parser.run();
-        gzfile.close();
+        file.close();
       } else {
-        fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+        GzipFile gzfile;
+        if (gzfile.open(gzname, "rb")) {
+          BufferedReader<char> reader(&gzfile);
+          reader.set_print_progress(true);
+          SqlParser parser(&reader, &data_handler);
+          parser.run();
+          gzfile.close();
+        } else {
+          fprintf(stderr, "failed to open file '%s' and '%s'\n", fname, gzname);
+        }
       }
+      data_handler.setExploreHidden(false);
+      // In second pass we ignore links to and from hidden nodes
     }
   }
   void finish(redisContext *redis) {
@@ -640,7 +654,12 @@ void CategoryLinksHandler::data(const vector<string> &data) {
     return;
   int from_graphId = g_wikigraphId[wikiId];
 
-  graph_->start_node(from_graphId);
+  if (!exploreHidden_) {
+    // We actually want to construct a cat graph
+    graph_->start_node(from_graphId);
+    if (g_nodeIsHidden[from_graphId])
+      return;
+  }
 
   const char *prefix = "c:";  // target is always a category
 
@@ -654,9 +673,19 @@ void CategoryLinksHandler::data(const vector<string> &data) {
     from_graphId, wikiId, title.c_str(), to_graphId,
     g_wikistatus[to_graphId].type);
 #endif
-    g_info.category_links_count++;
-
-    graph_->add_edge(to_graphId);
+    if (exploreHidden_) {
+      // Just mark all neighbours of hidden node
+      if (from_graphId == g_info.hidden_graphid || to_graphId == g_info.hidden_graphid) {
+        g_nodeIsHidden[from_graphId] = true;
+        g_nodeIsHidden[to_graphId] = true;
+      }
+    } else {
+      if (g_nodeIsHidden[to_graphId])
+        return;
+      // Construct edges to and from non-hidden nodes
+      g_info.category_links_count++;
+      graph_->add_edge(to_graphId);
+    }
   }
 }  // DataHandler::data
 
