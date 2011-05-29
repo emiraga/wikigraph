@@ -261,6 +261,11 @@
     </p>
     -->
 
+    <h2>Distributed processing</h2>
+    <p>
+      <code>5pm (UTC-7) 28 May 2011</code> - started with 19 computers, 4 cores each.
+    </p>
+
     <h1>Conclusion</h1>
 
     <p>
