@@ -21,5 +21,5 @@
 #define NODES_PER_PASS (1000 * 1000)
 
 // How many top nodes to return
-#define PAGERANK_RESULTS 20
+#define PAGERANK_RESULTS 100
 

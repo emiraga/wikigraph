@@ -104,7 +104,7 @@
     <p>
       To give an example, this non-existing article "Penny Can" (shown below) has 3 outgoing <b>article links</b> (AL) and 2 <b>category links</b> (CL).
       Former are directed whereas latter are undirected, individually they create two different graphs.
-      Each <b>article</b> and <b>category</b> is represented as one <b>node</b> in graphs.
+      Each <b>article</b> and <b>category</b> is represented as a <b>node</b>.
     </p>
     <img class="figure" src="http://i.imgur.com/iCJx9.png" />
     <div class="imglabel">Sample node with 3 AL and 2 CL.</div>
@@ -261,9 +261,14 @@
     </p>
     -->
 
-    <h2>Distributed processing</h2>
+    <h2>Distributed computation</h2>
     <p>
-      <code>5pm (UTC-7) 28 May 2011</code> - started with 19 computers, 4 cores each.
+      <code>5pm, 28 May 2011 (UTC+7)</code> - started with 19 computers (4 cores each) plus a controller.
+    </p>
+
+    <p>
+    Here is a <a href="http://i.imgur.com/fXy33.jpg">pic of a lab</a> that was used. Computers were booted over network and dataset resided in RAM,
+    this way I didn&#39;t have to touch the hard drives with whatever is installed on them.
     </p>
 
     <h1>Conclusion</h1>
