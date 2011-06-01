@@ -83,8 +83,10 @@
     </div>
 
     <p>
-      Data is generated using <a href="http://dumps.wikimedia.org/enwiki/20110405/">English wikipedia dumps (20110405)</a>. 
-      You may remember <a href="http://www.netsoc.tcd.ie/~mu/wiki/">similar efforts from 2007</a>.
+#define DUMPFILES "mysqldumps/enwiki-20110526-"
+#define DUMPFILES "mysqldumps/enwiki-20110526-"
+      Data is generated using <a href="http://dumps.wikimedia.org/enwiki/20110526/">English wikipedia dumps (20110526)</a>. 
+      You may remember <a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">similar efforts from 2007</a>.
       Technical details and source code are available at <a href="http://github.com/emiraga/wikigraph">github page</a>.
     </p>
 
@@ -92,7 +94,7 @@
 
     <table border="0" width="400px">
     <tbody>
-      <tr><th>Year<th class="oseven"><a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
+      <tr><th>Year<th class="oseven"><a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
       <tr><th>Articles<td class="oseven num">2301486<td class="num"><%=art.num_articles%></tr>
       <tr><th>Article links (AL)<td class="oseven num">55550003<td class="num"><%=art.num_links%></tr>
       <tr><th>Categories<td><td class="num"><%=cat.num_categories%></tr>
@@ -144,7 +146,7 @@
     </div>
     
     <p>
-      Compared to reports from <a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
+      Compared to reports from <a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
     </p>
 
     <h2>Minimum distance (AL)</h2>
@@ -154,7 +156,7 @@
     <% } %>
     <table border="0" width="400px">
       <tbody>
-        <tr><th><th class="oseven"><a href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
+        <tr><th><th class="oseven"><a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
         <tr><th>Average min-distance (clicks)<td class="oseven num">4.573<td class="num"><%= (art.distance_sum / art.reachable_sum ).toFixed(3) %></th></tr>
         <tr><th>Average reachable articles<td><td class="num"><%= (art.reachable_sum / art.nodes_done_proper ).toFixed(1) %></th></tr>
       </tbody>
