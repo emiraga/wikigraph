@@ -877,7 +877,7 @@ function main(opts) {
 
         var loaded = {};
         var signature = 'result:'+type+'D';
-        aof.on('SET', function(cmd, key, value) {
+        var aof_on_SET = function(cmd, key, value) {
           if(key.substr(0,signature.length) == signature) {
             var node = parseInt(key.substr(signature.length), 10);
             if (loaded[node]) return;
@@ -890,15 +890,22 @@ function main(opts) {
               graph_info.AddNodeDist(node, result.count_dist);
             }
           }
-        });
+        }
+        aof.on('SET', aof_on_SET);
 
         aof.readSync();
 
-        if(graph_info.sample_size != graph_info.nodes_done) {
-          console.log(graph_info.sample_size, graph_info.nodes_done);
-          console.log('It seems that AOF file is missing some data, run this script with --explore first.');
-        }
-      }
+        if (graph_info.sample_size != graph_info.nodes_done) {
+          console.log('It seems that AOF file is missing some data, run this script with --explore, but first let me try to fix this.');
+          for (var node = 1; node <= sample_size; node++) {
+            if (!loaded[node]) {
+              control.RunJob(type+'D'+node, function(job, result){
+                aof_on_SET('SET','result:'+job, JSON.stringify(result));
+              });
+            }
+          }
+        } //if data missing
+      }; //return function
     };
   }
 
