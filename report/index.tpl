@@ -265,7 +265,7 @@
 
     <h2>Distributed computation</h2>
     <p>
-      <code>5pm, 28 May 2011 (UTC+7)</code> - started with 19 computers (4 cores each) plus a controller.
+      <code>5pm, 28 May 2011 (UTC+7)</code> - started with 19 computers (AMD Phenon 2.3Ghz quad-core) and a single controller.
       <code>9pm, 1 June 2011 (UTC+7)</code> - done (after 100 hours); While running 4 processing nodes were taken down and later restored (other students wanted to use the lab as well).
     </p>
 

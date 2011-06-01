@@ -349,20 +349,23 @@ Controller.prototype.setExtDb = function(db) {
   this.extdb = db;
 }
 Controller.prototype._RunJob = function(job, callback) {
-  // First listen on a channel where results will be announced
   var self = this;
-  if (!this.explore) {
+  if (!self.explore) {
+    // First listen on a channel where results will be announced
     self.redis_pubsub.subscribeTo('announce:'+job, function(channel, msg) {
       self.redis_pubsub.unsubscribe(channel);
       console.log('Finished Job: '+job);
       callback(job, JSON.parse(msg));
     });
+    // Push the job on queue
+    self.redis.lpush('queue:jobs', job);
   } else {
-    // console.log('Added job: '+job);
-    callback(job, {error:'Running is explore mode'});
+    // From explore more, make sure job is added before quiting.
+    self.redis.lpush('queue:jobs', job, function(err) {
+      if (err) throw err;
+      callback(job, {error:'Running is explore mode'});
+    });
   }
-  // Push the job on queue
-  self.redis.lpush('queue:jobs', job);
 };
 Controller.prototype.RunJob = function(job, callback) {
   // console.log('Running Job: ' + job);
@@ -645,7 +648,7 @@ function BufferedReader(file) {
     this._fd = fs.openSync(file, 'r');
     this._buffer = '';
     this._off = 0;
-    this.RSIZE = 8*1024*1024;
+    this.RSIZE = 16*1024*1024;
     this._file_size = fs.statSync(file).size;
     this._file_read = 0;
 }
