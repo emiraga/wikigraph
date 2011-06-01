@@ -421,7 +421,7 @@ Controller.prototype.JobsForNodes = function(num_nodes, command, map, callback) 
         }
         node = endpoint;
       }
-      if (node < num_nodes || len > 0) {
+      if (node < num_nodes) {
         setTimeout(insert_bulk, 1000);
       } else {
         node = num_nodes;
