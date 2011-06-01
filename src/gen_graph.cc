@@ -49,10 +49,11 @@ struct WikiGraphInfo {
   int skipped_catlinks, skipped_fromcat_links;
   int category_links_count;
   int hidden_graphid;
+  int stub_graphid;
 } g_info;
 
 bool g_nodeIsCat[MAX_NODEID];
-bool g_nodeIsHidden[MAX_NODEID];  // Belongs to category Hidden_categories
+bool g_nodeIsHidden[MAX_NODEID];  // Belongs to category Hidden_categories OR Category:Stub_categories
 
 struct FVNHash {
   size_t operator()(const string& str) const {
@@ -166,6 +167,8 @@ class Stage1 : public Stage {
     }
     g_info.hidden_graphid = g_name2graphId["c:Hidden_categories"];
     printf("Hidden graphid %d\n", g_info.hidden_graphid);
+    g_info.stub_graphid = g_name2graphId["c:Stub_categories"];
+    printf("Stub graphid %d\n", g_info.stub_graphid);
   }
 
   void finish(redisContext *redis) {
@@ -187,6 +190,9 @@ class Stage1 : public Stage {
     freeReplyObject(reply);
     reply = redisCmd(redis,
         "SET s:special:HiddenGraphId %d", g_info.hidden_graphid);
+    freeReplyObject(reply);
+    reply = redisCmd(redis,
+        "SET s:special:StubGraphId %d", g_info.stub_graphid);
     freeReplyObject(reply);
 
     PageHandlerNames data_handler(redis);
@@ -608,7 +614,12 @@ class Stage4 : public Stage {
     data_handler.init();
     // In first pass we collect nodes that belong to hidden category
     data_handler.setExploreHidden(true);
-    g_nodeIsHidden[g_info.hidden_graphid] = true;
+    if (g_info.hidden_graphid) {
+      g_nodeIsHidden[g_info.hidden_graphid] = true;
+    }
+    if (g_info.stub_graphid) {
+      g_nodeIsHidden[g_info.stub_graphid] = true;
+    }
 
     const char *fname = DUMPFILES"categorylinks.sql";
     const char *gzname = DUMPFILES"categorylinks.sql.gz";
@@ -676,7 +687,9 @@ void CategoryLinksHandler::data(const vector<string> &data) {
     if (exploreHidden_) {
       // Just mark all neighbours of hidden node
       if (from_graphId == g_info.hidden_graphid
-          || to_graphId == g_info.hidden_graphid) {
+          || to_graphId == g_info.hidden_graphid
+          || from_graphId == g_info.stub_graphid
+          || to_graphId == g_info.stub_graphid) {
         g_nodeIsHidden[from_graphId] = true;
         g_nodeIsHidden[to_graphId] = true;
       }
