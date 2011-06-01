@@ -127,16 +127,16 @@
       For technical reasons, links from one article to another are counted just once.
     </p>
 
-    <table width="100%" border="0">
-      <tbody>
+    <div class="scrollbox" style="height:300px;">
+      <table width="100%" border="0">
         <% var pr=art.pageranks; for ( var i = 0; i != pr.length; i++ ) {  %>
           <tr rel="node<%=pr[i][1]%>" >
             <td><a href="<%=enwiki+pr[i][2]%>"><%=pr[i][2]%></a></td>
             <td>(<%=(100*pr[i][0]).toFixed(3)%>%)</td>
           </tr>
         <% } %>
-      </tbody>
-    </table>
+      </table>
+    </div>
 
     <h2>Strongly connected components (AL)</h2>
 
