@@ -645,7 +645,7 @@ function BufferedReader(file) {
     this._fd = fs.openSync(file, 'r');
     this._buffer = '';
     this._off = 0;
-    this.RSIZE = 16*1024*1024;
+    this.RSIZE = 8*1024*1024;
     this._file_size = fs.statSync(file).size;
     this._file_read = 0;
 }
@@ -865,7 +865,9 @@ function main(opts) {
         var aof = new AofReader(new BufferedReader(opts.aof));
         var graph_info = data[member_name];
         assert.strictEqual(graph_info.nodes_done, 0);
-        graph_info.on('all_done', callback);
+        graph_info.on('all_done', function(){
+          process.nextTick(callback);
+        });
         if(!sample_size || sample_size >= graph_info.num_nodes)
           sample_size = graph_info.num_nodes;
         graph_info.sample_size = sample_size;
