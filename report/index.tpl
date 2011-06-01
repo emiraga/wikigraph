@@ -266,10 +266,12 @@
     <h2>Distributed computation</h2>
     <p>
       <code>5pm, 28 May 2011 (UTC+7)</code> - started with 19 computers (4 cores each) plus a controller.
+      <code>9pm, 1 June 2011 (UTC+7)</code> - done (after 100 hours); While running 4 processing nodes were taken down and later restored (other students wanted to use the lab as well).
     </p>
 
     <p>
-    Here is a <a href="http://i.imgur.com/fXy33.jpg">pic of a lab</a> that was used. Computers were booted over network and dataset resided in RAM,
+    Here is a <a href="http://i.imgur.com/fXy33.jpg">pic of a lab</a> that was used.
+    Computers were booted into linux over the network and dataset resided in RAM,
     this way I didn&#39;t have to touch the hard drives with whatever is installed on them.
     </p>
 

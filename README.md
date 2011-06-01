@@ -72,8 +72,8 @@ Prepare redis server: Client timeout is annoying, disable that. Unix sockets are
     #save 900 1 don't save rdb while processing
     #save 300 10
     #save 60 1000 just comment saves out
-
-We rely on copy-on-write mechanism just like redis, that's why `overcommit_memory` should be set for all nodes.
+    vm-enabled yes
+    vm-max-memory 0
 
 On a single machine first generate graphs. Edit settings in `src/config.h.in` and compile binaries in Release mode (with asserts).
 
@@ -88,18 +88,19 @@ to the number of cores/processors that node has, for example command for dual co
 
 And finally start controller for the whole process
 
+    node analyze.js --explore
+    node analyze.js --aof=~/redis/appendonly.aof
+
+This will issue jobs, record the results and (second part) write a html report.
+
+If you have 8GB of RAM on the redis server (which i don't) you could turn off the `vm-enabled` in redis, or even you could not use the AOF. I don't know what happens exactly, but controller is run this way:
+
+    node analyze.js --explore
     node analyze.js
 
-This will issue jobs, record the results and write a html report.
-
-Bastard linux kernel tends to take memory away from processes. These settings helped me in strugle with memory
-
-    echo 20 > /proc/sys/vm/swappiness
-    echo 200 > /proc/sys/vm/vfs_cache_pressure
-
-Or, you can occasionally, drop the caches
-
-    sync; echo 3 | tee /proc/sys/vm/drop_caches
+Explore mode is added to work arround some mysterious and hard-to-reproduce bug with
+pubsub in [redis-node](https://github.com/bnoguchi/redis-node).
+Speaking of bugs, redis-2.2.7 will fail to restore itself from AOF (some assertion related to `brpoplpush`).
 
 Assumptions
 -----------
