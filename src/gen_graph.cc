@@ -850,10 +850,6 @@ int main(int argc, char *argv[]) {
     delete stages[i];
   }
 
-  // Save database to disk
-  reply = wikigraph::redisCmd(redis, "SAVE");
-  freeReplyObject(reply);
-
   redisFree(redis);
   return 0;
 }
