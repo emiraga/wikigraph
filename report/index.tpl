@@ -37,10 +37,6 @@
       -moz-box-shadow: 5px 5px 5px #000;
       -webkit-box-shadow: 5px 5px 5px #000;
       box-shadow: 5px 5px 5px #000;
-      /* seriously wtf? */
-      filter: progid:DXImageTransform.Microsoft.Blur(PixelRadius=3,MakeShadow=true,ShadowOpacity=0.30);
-      -ms-filter: "progid:DXImageTransform.Microsoft.Blur(PixelRadius=3,MakeShadow=true,ShadowOpacity=0.30)";
-      zoom: 1;
     }
     .nodeinfo p { font-size: 0.9em; line-height: 14px; margin-bottom: 3px; margin-top: 3px; }
     /*.nodeinfo .left { position:absolute; top:100px; left:0px; width: 220px; border: 0 solid black; }
