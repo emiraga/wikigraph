@@ -91,7 +91,7 @@
 
     <p>
       Data is generated using <a href="http://dumps.wikimedia.org/enwiki/20110526/">English wikipedia dumps (20110526)</a>. 
-      You may remember <a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">similar efforts from 2007</a>.
+      You may remember <a mirrorhref="2007.html" href="http://www.netsoc.tcd.ie/~mu/wiki/">similar efforts from 2007</a>.
       Technical details and source code are available at <a href="http://github.com/emiraga/wikigraph">github page</a>.
     </p>
 
@@ -99,7 +99,7 @@
 
     <table border="0" width="400px">
     <tbody>
-      <tr><th>Year<th class="oseven"><a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
+      <tr><th>Year<th class="oseven"><a mirrorhref="2007.html" href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
       <tr><th>Articles<td class="oseven num">2301486<td class="num"><%=art.num_articles%></tr>
       <tr><th>Article links (AL)<td class="oseven num">55550003<td class="num"><%=art.num_links%></tr>
       <tr><th>Categories<td><td class="num"><%=cat.num_categories%></tr>
@@ -151,7 +151,7 @@
     </div>
     
     <p>
-      Compared to reports from <a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
+      Compared to reports from <a mirrorhref="2007.html" href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
     </p>
 
     <h2>Minimum distance (AL)</h2>
@@ -161,7 +161,7 @@
     <% } %>
     <table border="0" width="400px">
       <tbody>
-        <tr><th><th class="oseven"><a href="2007.html" oldhref="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
+        <tr><th><th class="oseven"><a mirrorhref="2007.html" href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a><th>2011</tr>
         <tr><th>Average min-distance (clicks)<td class="oseven num">4.573<td class="num"><%= (art.distance_sum / art.reachable_sum ).toFixed(3) %></th></tr>
         <tr><th>Average reachable articles<td><td class="num"><%= (art.reachable_sum / art.nodes_done_proper ).toFixed(1) %></th></tr>
       </tbody>
@@ -189,11 +189,35 @@
       </table>
     </div>
 
+    <p>
+        If we try to eliminate some obvious listings, you are left with:
+
+    <div class="scrollbox" style="height:125px;">
+    <!-- This part is manually copy-pasted, needs to be updated. XXX TODO HACK -->
+<table width="100%" border="0">
+<tr rel="node871401"><td><a href="http://en.wikipedia.org/wiki/United_States">United_States</a></td><td> (3.469)</td></tr>
+<tr rel="node3257151"><td><a href="http://en.wikipedia.org/wiki/QI_(G_series)">QI_(G_series)</a></td><td> (3.474)</td></tr>
+<tr rel="node1015964"><td><a href="http://en.wikipedia.org/wiki/History_of_Western_civilization">History_of_Western_civilization</a></td><td> (3.474)</td></tr>
+<tr rel="node8856"><td><a href="http://en.wikipedia.org/wiki/London">London</a></td><td> (3.487) </td></tr>
+<tr rel="node1418822"><td><a href="http://en.wikipedia.org/wiki/Never_Ending_Tour">Never_Ending_Tour</a></td><td> (3.487) </td></tr>
+</table>
+    </div>
+
+    </p>
+
     <h1>Category links</h1>
 
     <p>
       Link is formed when one node (article/category) is declared to be in a category (see example at the top of the page).
       CLs are undirected, i.e. node belongs to another category and category has nodes in it.
+    </p>
+    <p>
+      In order to keep results relevant, all nodes that are members of
+      <a href="http://en.wikipedia.org/wiki/Category:Hidden_categories">hidden categories</a>
+      and
+      <a href="http://en.wikipedia.org/wiki/Category:Stub_categories">stub categories</a>
+      are stripped-off (nothing links with them). This way hidden and stub categories do not affect these results.
+      Perhaps, I should have treated <a href="http://en.wikipedia.org/wiki/Category:Disambiguation_pages">disambiguation pages</a> same way.
     </p>
     <!--
     <blockquote>
@@ -255,8 +279,11 @@
     </div>
 
     <p>
-      These results are a bit distorted, since <a href="http://en.wikipedia.org/wiki/Category:Hidden_categories">hidden categories</a>
-      are considered as nodes with no connections to other nodes (Component size = 1).
+      These results are a bit distorted, since
+      <a href="http://en.wikipedia.org/wiki/Category:Hidden_categories">hidden categories</a>
+      and
+      <a href="http://en.wikipedia.org/wiki/Category:Stub_categories">stub categories</a>
+      are considered as nodes with no connections to other nodes (Component size = 1 node).
     </p>
 
     <!--
@@ -269,10 +296,6 @@
     -->
 
     <h2>Distributed computation</h2>
-    <p>
-      <code>5pm, 28 May 2011 (UTC+7)</code> - started with 19 computers (AMD Phenon 2.3Ghz quad-core) and a single controller.
-      <code>9pm, 1 June 2011 (UTC+7)</code> - done (after 100 hours); While running 4 processing nodes were taken down and later restored (other students wanted to use the lab as well).
-    </p>
 
     <p>
     Here is a <a href="http://i.imgur.com/fXy33.jpg">pic of a lab</a> that was used.
@@ -280,28 +303,39 @@
     this way I didn&#39;t have to touch the hard drives with whatever is installed on them.
     </p>
 
+    <p>
+    To complete this report, it takes 100 hours of distributed processing on 19 nodes [AMD Phenom 2.3 GHZ Quad-Core with 2GB RAM]. In addition there is a controller [Intel Pentinum 1.86Ghz Dual-Core with 2GB RAM]. Controller also did some pre and post processing, about 4 hours. Biggest issue with controller was that I had only 2GB of RAM.
+    </p>
+
+    <p>
+    To be completely honest, I had to repeat some parts of computation. After getting first results, I realized that Hidden and Stub categories are going to be a problem, so I excluded them, but this meant that entire CLs graph is modified and some previous results are now invalid.
+    </p>
+
     <h1>Conclusion</h1>
 
     <p>
-    Even though, average number of article links per one article has increased from 25 to 50, average distance today is larger compared to 2007.
+    Even though average number of article links per one article has increased, average distance today is similar when compared to 2007.
     This might indicate that additional links contribute to create highly connected clusters of nodes. Within one group of articles distances are
-    quite small (visible in the peak of &quot;distance spectrum&quot;), but distance to other groups is larger. Running 
-    <abbr title="Strongly connected components">SCC</abbr> algorithm did reveal only a few of such components, whereas majority are still in one giant
-    bundle of nodes. Resolving this issue would mean to cluster nodes into significantly smaller groups.
+    quite small but distance to other groups is larger.
+    Running <abbr title="Strongly connected components">SCC</abbr> algorithm did reveal only a few of such components,
+    whereas majority are still in one giant bundle of nodes.
+    Resolving this issue would mean clustering nodes into significantly smaller but relevant groups.
     This could be a topic of further investigation (suggestions are welcome).
     </p>
 
     <p>
-    Graph with CL is a new concept that was not done before.
+    Graph with CL is a new concept that was not done before. It is dominated by Category:Living_People and has slightly larger average distance despite being bidirectional.
     </p>
 
     <p>
+      I don&#39;t like the modern research methodology where nobody else will ever be able to reproduce/recheck results that original researcher found.
       You can download source of this project in either
       <a href="http://github.com/emiraga/wikigraph/zipball/master">zip</a> or
       <a href="http://github.com/emiraga/wikigraph/tarball/master">tar</a> formats.
+      Read more <a href="http://github.com/emiraga/wikigraph">technical details.</a>
       You can also clone the project with <a href="http://git-scm.com">Git</a>
       by running:
-      <pre>$ git clone git://github.com/emiraga/wikigraph</pre>
+      <pre>$ git clone git://github.co m/emiraga/wikigraph</pre>
     </p>
 
 

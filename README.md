@@ -56,7 +56,7 @@ Output is written to `report/index.html`
 Real data from enwiki
 ---------------------
 
-To do analysis of real wikipedia database, download dumps from [english wikipedia dumps page](http://dumps.wikimedia.org/enwiki/) you only need a couple of files
+To do an analysis of real wikipedia database, download dumps from [english wikipedia dumps page](http://dumps.wikimedia.org/enwiki/) you only need a couple of files
 
  - categorylinks.sql.gz
  - category.sql.gz
@@ -64,7 +64,7 @@ To do analysis of real wikipedia database, download dumps from [english wikipedi
  - page.sql.gz
  - redirect.sql.gz
 
-Prepare redis server: Client timeout is annoying, disable that. Unix sockets are slightly faster that network. Background writes are annoying as well, append only files (AOF) provide a nice alternative. Relevant lines from `redis.conf`
+Prepare redis server: Flush the database. Client timeout is annoying, disable that. Unix sockets are slightly faster that network. Background writes are annoying as well, append only files (AOF) provide a nice alternative. Relevant lines from `redis.conf`
 
     unixsocket /tmp/redis.sock
     timeout 0
@@ -86,14 +86,19 @@ to the number of cores/processors that node has, for example command for dual co
 
     ./process_graph -r REDISHOST -p PORT -f 2
 
+And more verbose is to repeat following command X times.
+
+    ./process_graph -r REDISHOST -p PORT &
+
 And finally start controller for the whole process
 
     node analyze.js --explore
-    node analyze.js --aof=~/redis/appendonly.aof
+    node analyze.js --aof=/path/to/redis/appendonly.aof
 
 This will issue jobs, record the results and (second part) write a html report.
 
-If you have 8GB of RAM on the redis server (which i don't) you could turn off the `vm-enabled` in redis, or even you could not use the AOF. I don't know what happens exactly, but controller is run this way:
+If you have 8GB of RAM on the redis server (which i don't) you could turn off the `vm-enabled` in redis, or even you could even not use the AOF.
+I don't know what happens exactly, but controller is run this way:
 
     node analyze.js --explore
     node analyze.js
@@ -104,7 +109,7 @@ Speaking of bugs, redis-2.2.7 will fail to restore itself from AOF (some asserti
 
 Assumptions
 -----------
-* At Least 1.5GB of RAM.
-* Program is compiled and run as 32bit. (Maybe 64bit works as well, I did not try it myself.)
+* At Least 2.0GB of RAM.
+* Program is compiled and run on 32bit linux. (I did not try it on 64bit.)
 * `pagelinks.sql` and `categorylinks.sql` are exported with sorting `mysqldump --order-by-primary`
 
