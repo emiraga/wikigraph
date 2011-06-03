@@ -105,7 +105,7 @@ I don't know what happens exactly, but controller is run this way:
 
 Explore mode is added to work arround some mysterious and hard-to-reproduce bug with
 pubsub in [redis-node](https://github.com/bnoguchi/redis-node).
-Speaking of bugs, redis-2.2.7 will fail to restore itself from AOF (some assertion related to `brpoplpush`).
+Speaking of bugs, redis-2.2.7 will [fail to restore itself from AOF](https://gist.github.com/1007382) (some assertion related to `brpoplpush`).
 
 Assumptions
 -----------
