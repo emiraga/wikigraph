@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
 
-  <title>emiraga/wikigraph @ GitHub</title>
+  <title>English Wikipedia as a graph - emiraga/wikigraph @ GitHub</title>
 
   <style type="text/css">
     body { margin-top: 1.0em; background-color: #c7dbfe;
@@ -86,7 +86,7 @@
       <span class="small">by <a href="https://github.com/emiraga">emiraga</a></span></h1>
 
     <div class="description">
-      English Wikipedia as graph.
+      English Wikipedia as a graph.
     </div>
 
     <p>
