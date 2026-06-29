@@ -35,84 +35,6 @@ function tmpl(str, data){
 };
 // }}}
 
-// {{{ svgBarChart - lightweight inline SVG bar chart
-// Self-contained replacement for the (now defunct) Google Image Charts API.
-// No external service, library or account required; renders offline.
-//
-// @param values  array of numbers (bar heights)
-// @param opts    {width, height, max, barColor, lineColor, showX, showY, line, cls}
-function svgBarChart(values, opts) {
-  opts = opts || {};
-  var width = opts.width || 696;
-  var height = opts.height || 140;
-  var barColor = opts.barColor || '#76A4FB';
-  var lineColor = opts.lineColor || '#4D89F9';
-  var showX = opts.showX !== false;   // x-axis labels on by default
-  var showY = !!opts.showY;
-  var showLine = !!opts.line;
-  var n = values.length;
-
-  var max = opts.max;
-  if (max === undefined) {
-    max = 0;
-    for (var k = 0; k < n; k++) {
-      if (values[k] > max) max = values[k];
-    }
-  }
-  if (max <= 0) max = 1;
-
-  var padL = showY ? 46 : 6;
-  var padR = 6;
-  var padT = 8;
-  var padB = showX ? 16 : 6;
-  var plotW = width - padL - padR;
-  var plotH = height - padT - padB;
-  var slot = plotW / Math.max(n, 1);
-  var barW = slot * 0.8;
-  var baseY = padT + plotH;
-
-  var p = [];
-  p.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height +
-    '" viewBox="0 0 ' + width + ' ' + height +
-    '" font-family="Helvetica,Arial,sans-serif" font-size="10"' +
-    (opts.cls ? ' class="' + opts.cls + '"' : '') + '>');
-
-  // axes
-  p.push('<line x1="' + padL + '" y1="' + baseY + '" x2="' + (padL + plotW) +
-    '" y2="' + baseY + '" stroke="#888"/>');
-  if (showY) {
-    p.push('<line x1="' + padL + '" y1="' + padT + '" x2="' + padL +
-      '" y2="' + baseY + '" stroke="#888"/>');
-    p.push('<text x="' + (padL - 4) + '" y="' + baseY + '" text-anchor="end" fill="#555">0</text>');
-    p.push('<text x="' + (padL - 4) + '" y="' + (padT + 8) + '" text-anchor="end" fill="#555">' + max + '</text>');
-  }
-
-  var pts = [];
-  for (var i = 0; i < n; i++) {
-    var v = values[i] || 0;
-    var barH = v / max * plotH;
-    var x = padL + i * slot + (slot - barW) / 2;
-    var y = baseY - barH;
-    p.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
-      '" width="' + barW.toFixed(1) + '" height="' + Math.max(barH, 0).toFixed(1) +
-      '" fill="' + barColor + '"/>');
-    pts.push((x + barW / 2).toFixed(1) + ',' + y.toFixed(1));
-    if (showX) {
-      p.push('<text x="' + (padL + i * slot + slot / 2).toFixed(1) + '" y="' + (baseY + 12) +
-        '" text-anchor="middle" fill="#555">' + i + '</text>');
-    }
-  }
-
-  if (showLine && pts.length > 1) {
-    p.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' +
-      lineColor + '" stroke-width="1.5"/>');
-  }
-
-  p.push('</svg>');
-  return p.join('');
-}
-// }}}
-
 // {{{ class Node
 var Node = function(key, value) {
   this.key = key;
@@ -1090,7 +1012,27 @@ function main(opts) {
     fs.readFile('report/index.tpl', 'utf8', function(err, index_tpl) {
       if (err) throw err;
       data.enwiki = "http://en.wikipedia.org/wiki/";
-      data.svgBarChart = svgBarChart;
+
+      // Charts are rendered on the fly in the browser (see report/index.js).
+      // Instead of baking ~600 per-node SVG charts into the HTML, we inline
+      // only the data each chart needs and let the client draw them.
+      // 'count_dist' is trimmed to the first 10 buckets (all the chart shows).
+      var trim = function(g) {
+        return {
+          cd: g.count_dist.slice(0, 10),
+          md: g.max_dist,
+          in_degree: g.in_degree,
+          out_degree: g.out_degree,
+          reachable: g.stat.reachable,
+          closeness: g.stat.closeness
+        };
+      };
+      data.nodes_json = JSON.stringify(data.interesting_nodes.map(function(n) {
+        return { node: n.node, name: n.name, art: trim(n.art), cat: trim(n.cat) };
+      }));
+      data.al_spectrum_json = JSON.stringify(data.art.dist_spectrum.slice(0, 20));
+      data.cl_spectrum_json = JSON.stringify(data.cat.dist_spectrum);
+
       var cont = tmpl(index_tpl, data);
       fs.writeFile('report/index.html', cont, function (err) {
         if (err) throw err;

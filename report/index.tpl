@@ -167,8 +167,7 @@
       </tbody>
     </table>
 
-    <% var distspectrum = art.dist_spectrum.slice(0,20); %>
-    <%= svgBarChart(distspectrum, {width:696, height:140, line:true, cls:"figure"}) %>
+    <div id="al-spectrum-chart"></div>
     <div class="imglabel">Distance spectrum (AL).</div>
 
 
@@ -243,7 +242,7 @@
 
     <!-- <p>Distance between nodes (CL):</p> -->
 
-    <%= svgBarChart(cat.dist_spectrum, {width:696, height:140, line:true, cls:"figure"}) %>
+    <div id="cl-spectrum-chart"></div>
     <div class="imglabel">Distance spectrum (CL).</div>
 
     <h2>Closeness centrality (CL)</h2>
@@ -345,31 +344,13 @@
 
   </div>
 
-  <div id="interesing_nodes">
-    <% for ( var i = 0; i != interesting_nodes.length; i++ ) { var info = interesting_nodes[i]; %>
-      <div id="node<%=info.node%>" class="nodeinfo">
-        <h3><%=info.name%></h3>
-        <div class="left">
-          <p><b>Articles</b> at a particular distance:</p>
-          <% var count_dist = info.art.count_dist.slice(0,10); %>
-          <%= svgBarChart(count_dist, {width:215, height:100, showY:true, max:info.art.max_dist}) %>
-          <p>Incoming article links: <%=info.art.in_degree%></p>
-          <p>Outgoing article links: <%=info.art.out_degree%></p>
-          <p>Rachable articles: <%=info.art.stat.reachable%></p>
-          <p>Average distance: <%=(info.art.stat.closeness).toFixed(4)%></p>
-        </div>
-        <div class="right">
-          <p><b>Category links</b></p>
-          <p>Nodes at a particular distance:</p>
-          <% var count_dist = info.cat.count_dist.slice(0,10); %>
-          <%= svgBarChart(count_dist, {width:215, height:100, showY:true, max:info.cat.max_dist}) %>
-          <p>Category links: <%=info.cat.in_degree%></p>
-          <p>Rachable nodes: <%=info.cat.stat.reachable%></p>
-          <p>Average distance: <%=(info.cat.stat.closeness).toFixed(4)%></p>
-        </div>
-      </div>
-    <% } %>
-  </div>
+  <!-- Per-node tooltips are built on the fly by index.js from this inlined data. -->
+  <div id="interesing_nodes"></div>
+  <script type="text/javascript">
+    var WIKIGRAPH_NODES = <%=nodes_json%>;
+    var WIKIGRAPH_AL_SPECTRUM = <%=al_spectrum_json%>;
+    var WIKIGRAPH_CL_SPECTRUM = <%=cl_spectrum_json%>;
+  </script>
   <script src="index.js"></script>
 </body>
 </html>
