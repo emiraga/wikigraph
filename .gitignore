@@ -19,3 +19,4 @@ debug.sh
 core
 config.h
 node_modules/
+report/index.html
