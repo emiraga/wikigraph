@@ -99,34 +99,51 @@ function tooltipHtml(n) {
     '</div>';
 }
 
-$(function() {
+function init() {
   // Two main distance-spectrum charts.
-  $('#al-spectrum-chart').html(
-    svgBarChart(WIKIGRAPH_AL_SPECTRUM, {width: 696, height: 140, line: true, cls: 'figure'}));
-  $('#cl-spectrum-chart').html(
-    svgBarChart(WIKIGRAPH_CL_SPECTRUM, {width: 696, height: 140, line: true, cls: 'figure'}));
+  document.getElementById('al-spectrum-chart').innerHTML =
+    svgBarChart(WIKIGRAPH_AL_SPECTRUM, {width: 696, height: 140, line: true, cls: 'figure'});
+  document.getElementById('cl-spectrum-chart').innerHTML =
+    svgBarChart(WIKIGRAPH_CL_SPECTRUM, {width: 696, height: 140, line: true, cls: 'figure'});
 
   // Index node data by id; tooltips are built lazily on first hover.
   var nodeMap = {};
   for (var i = 0; i < WIKIGRAPH_NODES.length; i++) {
     nodeMap[WIKIGRAPH_NODES[i].node] = WIKIGRAPH_NODES[i];
   }
-  var $nodes = $('#interesing_nodes');
+  var nodesContainer = document.getElementById('interesing_nodes');
 
   var ensureTooltip = function(rel) {  // rel is e.g. "node12345"
     if (document.getElementById(rel)) return;  // already built
     var n = nodeMap[rel.substring(4)];
     if (!n) return;  // some listed rows have no per-node data
-    $nodes.append('<div id="' + rel + '" class="nodeinfo">' + tooltipHtml(n) + '</div>');
+    nodesContainer.insertAdjacentHTML('beforeend',
+      '<div id="' + rel + '" class="nodeinfo" style="display:none">' + tooltipHtml(n) + '</div>');
   };
 
-  $("tr[rel^=node]").mouseover(function(event) {
-    var rel = $(this).attr('rel');
+  // Event delegation: one pair of listeners for every node row.
+  document.addEventListener('mouseover', function(event) {
+    var tr = event.target.closest('tr[rel^="node"]');
+    if (!tr) return;
+    var rel = tr.getAttribute('rel');
     ensureTooltip(rel);
-    var $info = $("#" + rel);
-    $info && $info.css({left: event.pageX, top: event.pageY + 10, position: 'absolute'}).show();
-  }).mouseout(function(event) {
-    var $info = $("#" + $(this).attr('rel'));
-    $info && $info.hide();
+    var info = document.getElementById(rel);
+    if (!info) return;
+    info.style.left = event.pageX + 'px';
+    info.style.top = (event.pageY + 10) + 'px';
+    info.style.position = 'absolute';
+    info.style.display = 'block';
   });
-});
+  document.addEventListener('mouseout', function(event) {
+    var tr = event.target.closest('tr[rel^="node"]');
+    if (!tr) return;
+    var info = document.getElementById(tr.getAttribute('rel'));
+    if (info) info.style.display = 'none';
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

@@ -53,23 +53,11 @@
     .num { text-align: right; }
     .scrollbox { overflow:auto; overflow-y:scroll; overflow-x:hidden; border: 1px solid black; }
   </style>
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
-  <script type="text/javascript">
-  var _gaq = _gaq || [];
-  _gaq.push(["_setAccount", "UA-23718704-1"]);
-  _gaq.push(["_trackPageview"]);
-
-  (function() {
-    var ga = document.createElement("script"); ga.type = "text/javascript"; ga.async = true;
-    ga.src = ("https:" == document.location.protocol ? "https://ssl" : "http://www") + ".google-analytics.com/ga.js";
-    var s = document.getElementsByTagName("script")[0]; s.parentNode.insertBefore(ga, s);
-  })();
-  </script>
 </head>
 
 <body>
   <a href="http://github.com/emiraga/wikigraph"><img style="position: absolute; top: 0; right: 0; border: 0;"
-  src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
+  src="./forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
 
   <div id="container">
 
@@ -113,7 +101,7 @@
       Former are directed whereas latter are undirected, individually they create two different graphs.
       Each <b>article</b> and <b>category</b> is represented as a <b>node</b>.
     </p>
-    <img class="figure" src="https://i.imgur.com/iCJx9.png" />
+    <img class="figure" src="./iCJx9.png" />
     <div class="imglabel">Sample node with 3 AL and 2 CL.</div>
 
     <h2>Article PageRank</h2>
