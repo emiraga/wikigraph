@@ -18,3 +18,4 @@ process_graph
 debug.sh
 core
 config.h
+node_modules/
