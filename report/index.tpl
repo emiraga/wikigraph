@@ -79,7 +79,7 @@
 
     <p>
       Data is generated using <a href="http://dumps.wikimedia.org/enwiki/20110526/">English wikipedia dumps (20110526)</a>.
-      You may remember <a mirrorhref="2007.html" href="http://www.netsoc.tcd.ie/~mu/wiki/">similar efforts from 2007</a>.
+      You may remember <a mirrorhref="2007.html" href="./2007.html">similar efforts from 2007</a>.
       Technical details and source code are available at <a href="http://github.com/emiraga/wikigraph">github page</a>.
     </p>
 
