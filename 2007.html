@@ -1,0 +1,178 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<!--<base href="http://www.netsoc.tcd.ie/~mu/wiki/">--><base href="."></head><body><div style="background:#fff;border:1px solid #999;margin:-1px -1px 0;padding:0;"><div style="background:#ddd;border:1px solid #999;color:#000;font:13px arial,sans-serif;font-weight:normal;margin:12px;padding:8px;text-align:left">This is Google's cache of <a href="http://www.netsoc.tcd.ie/~mu/wiki/" style="text-decoration:underline;color:#00c">http://www.netsoc.tcd.ie/~mu/wiki/</a>. It is a snapshot of the page as it appeared on 22 May 2011 02:01:02 GMT. The <a href="http://www.netsoc.tcd.ie/~mu/wiki/" style="text-decoration:underline;color:#00c">current page</a> could have changed in the meantime. <a href="http://www.google.com/intl/en/help/features_list.html#cached" style="text-decoration:underline;color:#00c">Learn more</a><br><br><div style="float:right"><a href="http://webcache.googleusercontent.com/search?q=cache:rPuIcMpKkTcJ:www.netsoc.tcd.ie/~mu/wiki/+http://www.netsoc.tcd.ie/~mu/wiki/&hl=en&client=ubuntu&gl=my&strip=1" style="text-decoration:underline;color:#00c">Text-only version</a></div>
+<div>These terms only appear in links pointing to this page: <span style="font-weight:bold">http</span>&nbsp;<span style="font-weight:bold">www</span>&nbsp;<span style="font-weight:bold">netsoc</span>&nbsp;<span style="font-weight:bold">tcd</span>&nbsp;<span style="font-weight:bold">ie</span>&nbsp;<span style="font-weight:bold">mu</span>&nbsp;<span style="font-weight:bold">wiki</span>&nbsp;&nbsp;</div></div></div><div style="position:relative">
+
+
+<title>Six Degrees of Wikipedia</title>
+<style type="text/css">
+h1{
+text-align:center;
+}
+h2{
+font-family: sans-serif;
+font-weight: normal;
+font-size: 20px;
+font-style: italic;
+}
+h3{
+font-weight: bold;
+font-size: 15px;
+margin-top: 20px;
+margin-bottom: 5px;
+}
+div.content{
+padding: 20px;
+border: 1px dashed black;
+margin-left: 50px;
+background-color: #D1D1F0;
+}
+pre{
+display:block;
+margin-top:20px;
+margin-bottom:20px;
+margin-left:40px;
+font-family:monospace;
+}
+p{
+margin-top:5px;
+margin-bottom:5px;
+}
+.me{
+text-align:center;
+font-weight:bold;
+font-size:15px;
+}
+a.biglink{
+display:block;
+font-size:40px;
+font-weight:bold;
+text-align:center;
+padding:20px;
+}
+form{
+padding:20px;
+}
+p.new{
+font-weight:bold;
+}
+</style>
+
+
+<h1>Six Degrees of Wikipedia</h1>
+<div class="me">
+Stephen Dolan (m<span style="display:none">#NO#</span><span style="text-decoration:none">u</span>@n<span style="color:black">e</span>t<span style="display:none">#SPAM#</span>so<!--yay! spambots-->c.tc<span style="display:none">#PLEASE#</span>d.ie)
+</div>
+<!--Horrible hack to get centering working cross-browser-->
+<div style="text-align:center">
+<div style="margin:0px auto; text-align:left; width:700px">
+<div style="text-align:center;font-weight:bold;padding:40px;">There's now a <a href="http://moneyaisle.com/worldwide/mu-wiki-be">Belorussian translation</a> of this article.</div>
+<h2>the question</h2>
+<div class="content">
+<p>Ever heard of the game <a href="http://en.wikipedia.org/wiki/Six_Degrees_of_Kevin_Bacon">Six Degrees of Kevin Bacon</a>? If you haven't, it works like this: Every actor gets a Kevin Bacon number. Kevin Bacon has a Kevin Bacon number of 0, actors who were in a movie with Kevin Bacon get a Kevin Bacon number of 1, actors who were in a movie with someone who has a Kevin Bacon number 1 get a 2, and so on (Everybody always gets the smallest number possible, so if you were in a film with two people, one with a 4 and one with a 6, your Kevin Bacon number would be 5).</p>
+<p>The same idea could apply to the articles Wikipedia. Instead of taking "in the same film" as the relation, you can take "is linked to by". We'll call the "Kevin Bacon number" from one article to another the "distance" between them. It's then possible to work out the "closeness" of an article in Wikipedia as its average distance to any other article. I wanted to find the centre of wikipedia, that is, the article that is closest to all other articles (has minimum closeness).</p>
+<p class="new">Several people were asking about what's known as the "diameter" of Wikipedia, that is, the distance between the two articles furthest apart (the longest shortest path if that makes any sense to you). This was in fact the original goal of the project but it turned out not to be very interesting. Wikipedia has giant "tails", almost linear linked lists of articles that stretch out for 70 links. The worst offenders were the subpages of List of named asteroids as each is only linked from the previous one, and it takes about 70 links to get from anywhere to the last one. So, you find that the two articles furthest from each other are <a href="http://en.wikipedia.org/wiki/List_of_asteroids/145701%E2%80%93145800">List of asteroids/145701-145800</a>, linked to by List of asteroids/145601-145700, linked to by List of asteroids/145501-145600, and so on for 70 links until you get back to some vageuly normal article. This is far less interesting that I was hoping. Even when I special-cased out that string of 70 boring articles, a new one appeared (I think it was linked pages about administrations of Myanmar or something). Rather than special-casing out reams of articles, I decided to pick a different metric, one that better reflects the structure of wikipedia without arbitrarily removing parts of it.</p>
+<p class="new">Another question that came up was why I chose the "departure center" (the article from which it's easiest to get anywhere else), rather than the "arrival center" (the article that it's easiest to get to). The reason for this is that the "departure center" depends on the content of individual articles, and the profusion of links within them. The arrival center is more easily biased by lots of links to particular articles, and gets thrown off by automated bots which create stub articles within a topic that link to the main page about that topic.</p>
+</div>
+<h2>the answer</h2>
+<div class="content">
+<p class="new">
+Wikipedia has 2301486 articles with 55550003 links between them (at least in my dataset, those numbers have definitely changed by now). The largest "strongly-connected-component" of wikipedia has 2111480 articles. That is, there are 2111480 articles with the property that from any of them, it is possible to get to any other one. The rest are mostly pages that no-one has linked to or disambiguation pages. For the graph-theory nerds, there is no other disjoint strongly connected component of more than about 3 articles. For everyone else, the remaining 190006 articles are pretty boring, linkwise.</p>
+The centre of Wikipedia is:
+<a class="biglink" href="http://en.wikipedia.org/wiki/2007">2007</a>
+From this article, it takes on average 3.45 clicks to get to any of the 2111479 articles reachable from it. The top 10 articles are <a href="http://en.wikipedia.org/wiki/2007">2007</a>, <a href="http://en.wikipedia.org/wiki/Deaths_in_2004">Deaths in 2004</a>, <a href="http://en.wikipedia.org/wiki/2006">2006</a>, <a href="http://en.wikipedia.org/wiki/2004">2004</a>, <a href="http://en.wikipedia.org/wiki/List_of_accidents_and_incidents_on_commercial_aircraft">List of accidents and incidents on commercial aircraft</a>, <a href="http://en.wikipedia.org/wiki/Star_Alliance_destinations">Star Alliance destinations</a>, <a href="http://en.wikipedia.org/wiki/1990s">1990s</a>, <a href="http://en.wikipedia.org/wiki/List_of_town_tramway_systems_in_North%20America">List of town tramway systems in North America</a>, <a href="http://en.wikipedia.org/wiki/2005">2005</a> and <a href="http://en.wikipedia.org/wiki/1967">1967</a>. 
+<p>If you skip past all of the articles that are just lists, years or days of the year, the "real article" closest to the centre is:
+<a class="biglink" href="http://en.wikipedia.org/wiki/United_Kingdom">United Kingdom</a>
+at an average of 3.67 clicks to anywhere else. <b>Update: It wasn't really clear that I meant "anywhere else it is possible to go to from United Kingdom". There are of course some pages that can't be gotten to from anywhere, mostly disambiguation pages.</b> Following it are <a href="http://en.wikipedia.org/wiki/Billie_Jean_King">Billie Jean King</a> and <a href="http://en.wikipedia.org/wiki/United_States">United States</a> (in that order, strangely) with averages of 3.68 and 3.69 clicks respectively.</p>
+<p>By the way, it takes an average of 3.98 clicks to get from <a href="http://en.wikipedia.org/wiki/Kevin_Bacon">Kevin Bacon</a> to anywhere else.</p>
+<p>If you follow the best route in all cases, it takes an average of 4.573 clicks to get from any Wikipedia article to any other.</p>
+<p>The complete results are available <a href="http://www.netsoc.tcd.ie/~mu/wiki/final_output.txt.gz">here</a>. Warning: this is a large file (~37MB), UTF-8, and gzipped (Windows users try <a href="http://www.7-zip.org/">7-Zip</a> if you can't open gzip files).</p>
+</div>
+<h2>find shortest paths</h2>
+<div class="content">
+<p>
+You can query the Wikipedia dataset to find the shortest route between two articles. Routes are accurate as of when the database dump was taken (3rd of March, 2008). If the route doesn't seem to work, click "history" and go back to around that date as the links may have been since deleted.
+</p>
+<form method="GET" action="http://netsoc.tcd.ie/~mu/cgi-bin/shortpath.cgi">
+From <input type="text" name="from"> to <input type="text" name="to"> <input type="submit" value="Go!">
+</form>
+<p class="new">
+A lot of people were asking that this ignore "boring" articles, like years and dates and so on. I actually implemented this a while ago, but ran into problems with defining "boring". I initally used the definition "years are boring, dates are boring, articles that start with "List of" and have more than 500 links are boring". The problem with this is that it's too narrow. There are other boring list-like articles, such as "Deaths in 2004". Also, some years are interesting articles. No-one would claim that two things happening in 352 BC doesn't constitute a real connection between those topics. There are other metrics, like requiring a certain minimum text-to-link ratio for the pages, but this eventually runs in to similar problems (no matter where the cut-off is, there are good articles that are ignored and boring articles that make the cut). Anyway, I decided that whatever means of selection was chosen, the results would indicate more about the selection criteria than about the structure of Wikipedia itself, so for the sake of integrity I left all the "boring" articles in.
+</p>
+</div>
+<h2>techie stuff</h2>
+<div class="content">
+<p>Every couple of months, the Wikipedia folks dump their entire database and <a href="http://download.wikimedia.org/">put it online</a> for all to download. There's a couple of different versions depending on which information you want, but the most interesting is <code>pages-articles.xml.bz2</code>. It's about 3.5 GB of compressed XML and it contains all of the articles on Wikipedia, but not their full edit histories and also omits things like Talk pages or users' pages (If you want those as well, the download goes up to about 150GB).</p>
+<p>Anyway, I'm studying in Trinity College Dublin, who have a gigantic broadband link, so downloading 3.5GB wasn't a problem. </p>
+<h3>Parsing</h3>
+<p>150GB of XML (after it's uncompressed) is <i>far</i> too much data to run any sort of analysis over. It also contains a pile of useless information, for example I didn't care about the content of the articles, only which other articles they linked to. So, I needed to parse this blob of XML into a more efficient format. I needed the title of each article, and the list of links from that article to any other. Also, I needed it to handle redirects, so that a redirect to an article was considered the same article as the article itself. Finally, assigning integer ID numbers to articles instead of string titles would make the algorithms run orders of magnitude faster.</p>
+<p>There was originally a single gigantic Perl script to do this, but the server I was running it on enforced a 2-hour CPU ulimit so the script got killed. It was split up into 3 smaller scripts. The first one, <code>wikiparse1</code>, listed article titles and redirects on standard out, each line consisting of either "article name" or "article name, tab, redirect target". (the code uses many ad-hoc file formats based on tabs or newlines as separators, this is fine as <a href="http://en.wikipedia.org/wiki/Wikipedia:Naming_conventions_%28technical_restrictions%29#Characters_totally_forbidden_in_page_titles">MediaWiki disallows these characters in page titles</a>). The code used <code>XML::Parser::Expat</code>. There is a Parse::MediaWikiDump module, but it was far too slow. <code>wikiparse1 was run as:</code></p>
+<pre>pv wp.xml.bz2 | bunzip2 -c | ./wikiparse1 &gt; output1</pre>
+<p><code>pv</code> is a wonderful tiny tool that copies a file to standard output, drawing a progress bar on standard error and giving an estimated time-to-completion</p>
+<p>Next, articles were assigned index numbers. This was the job of <code>wikiparse2</code>. It took the output of <code>wikiparse1</code> and built a giant hashtable of article titles. It went through this list, assigning ID numbers starting from 0 to each article, ensuring that all the redirects to an article got the same ID number as the article itself. Its output was a file of "ID, space, article title", with an extra "*" at the start if this was real article, rather than a redirect (so each ID number may appear multiple times, but only once with a "*" before it).</p>
+<p>Finally, <code>wikiparse3</code> loaded the output from that script and went through the XML dump again, this time outputting lines of the form "ID, space, ID" whenever it found a link from one article to another.</p>
+<p>These scripts went through many, many revisions as I figured out the various complexities of MediaWiki markup. For instance, most redirects are written as <code>#REDIRECT[[Article Title]]</code>. It turns out that REDIRECT can be upper or lowercase or mixed, and any amount of whitespace can be put after the T and before the [, or between the [[ and the title, or after the title and before the ]]. That failed sometimes because redirects can be specified as <code>#REDIRECT[[Article title#specific part]]</code>, so the end had to be stripped out. Then I discovered that there is an optional colon: <code>#REDIRECT:[[Article]]</code>, which is used on a couple of thousand of the millions of pages on wikipedia. And so on. The code I ended up with to parse and sanitize a redirect was:
+</p><pre>if ($text =~ /#REDIRECT\s*:?\s*\[\[\s*:?\s*(.*?)(?:\]\]|\||#)/si){
+    my $x = ucfirst $1;
+    $x =~ s/[ _]+/ /gs;
+    $x =~ s/\s+$//s;
+    $x =~ s/^\s+//s;
+</pre>
+
+<p>For the rest of the project, I needed to be able to do fast lookups from ID to name or from name to ID. I initially tried using Berkeley DB for this, but it was too slow. BDB is optimised for constant updates, it's a very fast solution for data that changes often. However, I knew my data didn't change, so there were better-performing solutions like a trie rather than a hashtable. Luckily, I didn't have to write my own since Dan J. Bernstein had already written <code>cdb</code>, and Tim Goodwin had written <code>CDB_File</code>, a Perl module to build and use them.</p><p>
+
+</p><p>Next, I built a database of the links in a more efficient binary form. The format was: number of articles, number of links, list number of links in each article, list of links. The list of links was the ID number of the article that each link led to, sorted in order of the ID number of the article that each came from, and the list of number of links was an integer offset into the links list that said where the block of links for this article began. This was an incredibly space-efficient way of storing the data, and got the full link database for Wikipedia down to about 160MB. The program to generate this database was written in C++. Throughout this project, my aim was to get the answers rather than to create an elegant platform for analysis. So, I always used whatever tool seemed most suited to the current task, which stopped being Perl after the hairy parsing, text manipulation and Unicode handling was done.</p>
+
+<h3>Graph theory</h3>
+<p class="new">This link database forms a directed graph where the nodes are articles and the edges are links from one article to another. There were 2301486 nodes (articles) and 55550003 edges (links). This made for quite a sparse graph, with each node having an average of about 25 links (out of possible millions). In the complexities below, I just use "n" to denote either number of nodes or number of edges. Since the graph is so sparse, they're mostly interchangeable.</p>
+<p>The "distance" from one article to another is defined as the length of the shortest path from the start article to the end article. Since the graph is directed, the distance from A to B might be different from the distance from B to A (i.e. A links to B does not necessarily mean B links to A). The aim is to find the "center" article, that is, the article with the minimum average distance to any other article (this is the measure of <a href="http://en.wikipedia.org/wiki/Centrality#Closeness_centrality">closeness centrality</a>).</p>
+<p>A naive way of finding this would be to find the shortest distance between all pairs of articles. Finding the shortest distance between two articles by breadth-first search takes O(n) time, and there are O(n<sup>2</sup>) pairs of articles, so this algorithm be of order O(n<sup>3</sup>), which is far too slow when you have millions of articles to get through.</p>
+<p>The breadth-first-search algorithm can be used to find the shortest distance between two nodes as follows:</p>
+<pre>start = {start node}
+end = {end node}
+dist = 0
+marked(n) = false for all nodes n
+queue = [start]
+while queue is not empty:
+  dist = dist + 1
+  newqueue = []
+  for each node n in queue:
+    for each edge from node n to node m:
+      if not marked(m):
+        marked(m) = true
+        if m == end:
+          -- We've found the end node
+          -- it's a distance "dist" from the start
+          return dist 
+        add m to newqueue
+  queue = newqueue
+</pre>
+<p>This iterates over every node, marking them as reached when it finds them. Whenever it hits a node, it adds all of the nodes linked to by it to a queue for processing. So, it is guaranteed to find the shortest path to each node first. With a small modification, this algorithm can be used to find the average distance to every node from the start node, rather than the distance to a particular node:</p>
+<pre>start = {start node}
+end = {end node}
+dist = 0
+total_distance = 0
+reachable_nodes = 1 -- the start node
+marked(n) = false for all nodes n
+queue = [start]
+while queue is not empty:
+  dist = dist + 1
+  newqueue = []
+  for each node n in queue:
+    for each edge from node n to node m:
+      if not marked(m):
+        marked(m) = true
+        total_distance = total_distance + dist
+        reachable_nodes = reachable_nodes + 1
+        add m to newqueue
+  queue = newqueue
+</pre>
+<p>After the loop finishes, total_distance divided by reachable_nodes is the closeness of the node. So, if I run this algorithm for each node in the graph, I'll get back the closeness of each one and can just pick the minimum.</p>
+<h3>Distributed Computing</h3>
+<p>O(n<sup>2</sup>) is a big improvement over the naive algorithm, but it's still going to take a long time. Since I wanted to get it done before term ended (and I wanted to play with clustering), I distributed the task over many machines. It's a very parallelisable task since you can just send the entire graph to each machine and get them to compute the centralities of different sets of nodes, then send their answers back to a central server which can compute the answers.</p>
+<p>I wrote a simple server in Python, which handed out work units to clients that connected and collected their results afterwards. The server was smart enough to handle clients with varying speed, and could recover from a client dying (it would wait a while to see if it recovered, and then just reallocated its work units to some other client). The client was modified to be able to talk to the server, and also given the ability to fork off a number of processes to compute, using only one copy of the dataset in RAM (this meant I could double speed without doubling memory usage on dual-core machines). It ran for a few days on Netsoc's server, <a href="http://spoon.netsoc.tcd.ie/">Spoon</a> and also on the Computer Science Society (DUCSS)'s machine and a workstation. Here's an <a href="http://www.netsoc.tcd.ie/~mu/wiki/spoongraph.png">interesting graph</a> that shows the effect the project had on Spoon's CPU temperature.</p>
+<p>There is a computer lab in the CS department of Trinity, half of which is full of shiny new Core 2 Duos running Linux (Debian). So, I borrowed a few spare CPU cycles and left it running on both cores of most of those machines for a few days. If it had been running at peak throughput all the time, it would have finished in abou 36 hours, but since I only added the lab's machines after a few days it took about 6 days in all for the graph analysis to complete.</p>
+</div> 
+</div>
+</div>
+
+</div></body></html>
