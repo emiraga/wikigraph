@@ -30,7 +30,7 @@
     hr { border: 0; width: 100%; border-bottom: 1px solid #000}
     .footer { text-align:center; padding-top:30px; font-style: italic; }
     p { line-height: 25px; text-align: justify; }
-    .nodeinfo { 
+    .nodeinfo {
       border: 1px solid black;
       width: 440px; height 20px; background-color: white; padding:0px 5px 0px 5px;
       -o-box-shadow: 5px 5px 5px #000;
@@ -53,7 +53,7 @@
     .num { text-align: right; }
     .scrollbox { overflow:auto; overflow-y:scroll; overflow-x:hidden; border: 1px solid black; }
   </style>
-  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
   <script type="text/javascript">
   var _gaq = _gaq || [];
   _gaq.push(["_setAccount", "UA-23718704-1"]);
@@ -68,8 +68,8 @@
 </head>
 
 <body>
-  <a href="http://github.com/emiraga/wikigraph"><img style="position: absolute; top: 0; right: 0; border: 0;" 
-  src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
+  <a href="http://github.com/emiraga/wikigraph"><img style="position: absolute; top: 0; right: 0; border: 0;"
+  src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
 
   <div id="container">
 
@@ -90,7 +90,7 @@
     </div>
 
     <p>
-      Data is generated using <a href="http://dumps.wikimedia.org/enwiki/20110526/">English wikipedia dumps (20110526)</a>. 
+      Data is generated using <a href="http://dumps.wikimedia.org/enwiki/20110526/">English wikipedia dumps (20110526)</a>.
       You may remember <a mirrorhref="2007.html" href="http://www.netsoc.tcd.ie/~mu/wiki/">similar efforts from 2007</a>.
       Technical details and source code are available at <a href="http://github.com/emiraga/wikigraph">github page</a>.
     </p>
@@ -113,7 +113,7 @@
       Former are directed whereas latter are undirected, individually they create two different graphs.
       Each <b>article</b> and <b>category</b> is represented as a <b>node</b>.
     </p>
-    <img class="figure" src="http://i.imgur.com/iCJx9.png" />
+    <img class="figure" src="https://i.imgur.com/iCJx9.png" />
     <div class="imglabel">Sample node with 3 AL and 2 CL.</div>
 
     <h2>Article PageRank</h2>
@@ -149,13 +149,13 @@
           <% } %>
       </table>
     </div>
-    
+
     <p>
       Compared to reports from <a mirrorhref="2007.html" href="http://www.netsoc.tcd.ie/~mu/wiki/">2007</a>, now we see more a lot more of non-trivial small components.
     </p>
 
     <h2>Minimum distance (AL)</h2>
- 
+
     <% if(art.nodes_done != art.num_nodes) { %>
       This data is based on random sampling of <%=art.nodes_done%> (<%=(100*art.nodes_done/art.num_nodes).toFixed(1)%>%) nodes.
     <% } %>
@@ -230,7 +230,7 @@
     -->
 
     <h2>Minimum distance (CL)</h2>
- 
+
     <% if(cat.nodes_done != cat.num_nodes) { %>
       This data is based on random sampling of <%=cat.nodes_done%> (<%=(100*cat.nodes_done/cat.num_nodes).toFixed(1)%>%) nodes.
     <% } %>
@@ -290,7 +290,7 @@
     <h2>Interactive</h2>
 
     <p>
-      I don&#39;t have public server to host a web service. However, there are 
+      I don&#39;t have public server to host a web service. However, there are
       <a href="http://en.wikipedia.org/wiki/Wikipedia:Six_degrees_of_Wikipedia#External_links">other tools</a> available for computing minimum distance.
     </p>
     -->
@@ -373,4 +373,3 @@
   <script src="index.js"></script>
 </body>
 </html>
-
