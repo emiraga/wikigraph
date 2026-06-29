@@ -35,6 +35,84 @@ function tmpl(str, data){
 };
 // }}}
 
+// {{{ svgBarChart - lightweight inline SVG bar chart
+// Self-contained replacement for the (now defunct) Google Image Charts API.
+// No external service, library or account required; renders offline.
+//
+// @param values  array of numbers (bar heights)
+// @param opts    {width, height, max, barColor, lineColor, showX, showY, line, cls}
+function svgBarChart(values, opts) {
+  opts = opts || {};
+  var width = opts.width || 696;
+  var height = opts.height || 140;
+  var barColor = opts.barColor || '#76A4FB';
+  var lineColor = opts.lineColor || '#4D89F9';
+  var showX = opts.showX !== false;   // x-axis labels on by default
+  var showY = !!opts.showY;
+  var showLine = !!opts.line;
+  var n = values.length;
+
+  var max = opts.max;
+  if (max === undefined) {
+    max = 0;
+    for (var k = 0; k < n; k++) {
+      if (values[k] > max) max = values[k];
+    }
+  }
+  if (max <= 0) max = 1;
+
+  var padL = showY ? 46 : 6;
+  var padR = 6;
+  var padT = 8;
+  var padB = showX ? 16 : 6;
+  var plotW = width - padL - padR;
+  var plotH = height - padT - padB;
+  var slot = plotW / Math.max(n, 1);
+  var barW = slot * 0.8;
+  var baseY = padT + plotH;
+
+  var p = [];
+  p.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height +
+    '" viewBox="0 0 ' + width + ' ' + height +
+    '" font-family="Helvetica,Arial,sans-serif" font-size="10"' +
+    (opts.cls ? ' class="' + opts.cls + '"' : '') + '>');
+
+  // axes
+  p.push('<line x1="' + padL + '" y1="' + baseY + '" x2="' + (padL + plotW) +
+    '" y2="' + baseY + '" stroke="#888"/>');
+  if (showY) {
+    p.push('<line x1="' + padL + '" y1="' + padT + '" x2="' + padL +
+      '" y2="' + baseY + '" stroke="#888"/>');
+    p.push('<text x="' + (padL - 4) + '" y="' + baseY + '" text-anchor="end" fill="#555">0</text>');
+    p.push('<text x="' + (padL - 4) + '" y="' + (padT + 8) + '" text-anchor="end" fill="#555">' + max + '</text>');
+  }
+
+  var pts = [];
+  for (var i = 0; i < n; i++) {
+    var v = values[i] || 0;
+    var barH = v / max * plotH;
+    var x = padL + i * slot + (slot - barW) / 2;
+    var y = baseY - barH;
+    p.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
+      '" width="' + barW.toFixed(1) + '" height="' + Math.max(barH, 0).toFixed(1) +
+      '" fill="' + barColor + '"/>');
+    pts.push((x + barW / 2).toFixed(1) + ',' + y.toFixed(1));
+    if (showX) {
+      p.push('<text x="' + (padL + i * slot + slot / 2).toFixed(1) + '" y="' + (baseY + 12) +
+        '" text-anchor="middle" fill="#555">' + i + '</text>');
+    }
+  }
+
+  if (showLine && pts.length > 1) {
+    p.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' +
+      lineColor + '" stroke-width="1.5"/>');
+  }
+
+  p.push('</svg>');
+  return p.join('');
+}
+// }}}
+
 // {{{ class Node
 var Node = function(key, value) {
   this.key = key;
@@ -1012,6 +1090,7 @@ function main(opts) {
     fs.readFile('report/index.tpl', 'utf8', function(err, index_tpl) {
       if (err) throw err;
       data.enwiki = "http://en.wikipedia.org/wiki/";
+      data.svgBarChart = svgBarChart;
       var cont = tmpl(index_tpl, data);
       fs.writeFile('report/index.html', cont, function (err) {
         if (err) throw err;
